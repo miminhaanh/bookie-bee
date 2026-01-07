@@ -1,0 +1,175 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* BookWorm Design System - Tối giản, vui tươi */
+
+@layer base {
+  :root {
+    --background: 40 33% 98%;
+    --foreground: 20 14% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 14% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14% 15%;
+
+    /* Coral - Primary accent */
+    --primary: 16 85% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Teal - Secondary accent */
+    --secondary: 174 62% 47%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 40 20% 94%;
+    --muted-foreground: 20 10% 45%;
+
+    /* Golden accent */
+    --accent: 43 96% 56%;
+    --accent-foreground: 20 14% 15%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 16 85% 60%;
+
+    --radius: 0.75rem;
+
+    /* Custom BookWorm colors */
+    --streak: 43 96% 56%;
+    --reading: 0 84% 60%;
+    --completed: 142 76% 45%;
+    --to-read: 217 91% 60%;
+    
+    /* Highlight colors */
+    --highlight-yellow: 48 96% 76%;
+    --highlight-blue: 210 100% 80%;
+    --highlight-red: 0 100% 85%;
+
+    /* Reader themes */
+    --reader-light-bg: 40 33% 98%;
+    --reader-light-text: 20 14% 15%;
+    --reader-dark-bg: 220 20% 10%;
+    --reader-dark-text: 40 20% 90%;
+    --reader-sepia-bg: 40 50% 90%;
+    --reader-sepia-text: 30 30% 20%;
+    --reader-green-bg: 120 20% 8%;
+    --reader-green-text: 120 100% 50%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 16 85% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 20% 94%;
+    --sidebar-accent-foreground: 20 14% 15%;
+    --sidebar-border: 40 15% 88%;
+    --sidebar-ring: 16 85% 60%;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 40 20% 95%;
+
+    --card: 220 20% 13%;
+    --card-foreground: 40 20% 95%;
+
+    --popover: 220 20% 13%;
+    --popover-foreground: 40 20% 95%;
+
+    --primary: 16 85% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 174 62% 40%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 15% 18%;
+    --muted-foreground: 40 10% 60%;
+
+    --accent: 43 96% 50%;
+    --accent-foreground: 20 14% 15%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 16 85% 55%;
+
+    --streak: 43 96% 56%;
+    --reading: 0 84% 55%;
+    --completed: 142 76% 40%;
+    --to-read: 217 91% 55%;
+
+    --sidebar-background: 220 20% 10%;
+    --sidebar-foreground: 40 20% 90%;
+    --sidebar-primary: 16 85% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 40 20% 90%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 16 85% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  /* Safe area padding for mobile */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Animations */
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px hsl(16 85% 60% / 0.3); }
+    50% { box-shadow: 0 0 40px hsl(16 85% 60% / 0.5); }
+  }
+
+  .animate-blink {
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out forwards;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+}

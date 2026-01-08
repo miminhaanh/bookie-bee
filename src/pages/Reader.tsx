@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Settings, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,16 @@ import { Label } from "@/components/ui/label";
 import { useBooks } from "@/hooks/useBooks";
 import { useAuth } from "@/hooks/useAuth";
 import { useReadingSession } from "@/hooks/useReadingSession";
+import { useHighlights } from "@/hooks/useHighlights";
 import { cn } from "@/lib/utils";
+import ePub from "epubjs";
+import { Document, Page, pdfjs } from "react-pdf";
+// Local stylesheet with minimal rules for react-pdf text and annotation layers
+import 'react-pdf/dist/Page/TextLayer.css';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import { supabase } from "@/integrations/supabase/client";
+
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 type ReaderTheme = "light" | "dark" | "sepia" | "green";
 
@@ -27,8 +36,19 @@ const Reader = () => {
   const [fontFamily, setFontFamily] = useState<"sans" | "serif">("sans");
   const [lineHeight, setLineHeight] = useState(1.8);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isPdf, setIsPdf] = useState(false);
+  const [isEpub, setIsEpub] = useState(false);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const epubRef = useRef<HTMLDivElement | null>(null);
+  const renditionRef = useRef<any>(null);
+  const bookRef = useRef<any>(null);
+  const pdfContainerRef = useRef<HTMLDivElement | null>(null);
+  const [selectionText, setSelectionText] = useState<string | null>(null);
+  const [selectionRect, setSelectionRect] = useState<{ top: number; left: number } | null>(null);
+  const [showSelectionToolbar, setShowSelectionToolbar] = useState(false);
   
-  const hideUITimeout = useRef<NodeJS.Timeout>();
+  const hideUITimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { user, loading: authLoading } = useAuth();
   const { books, updateBook } = useBooks();
   const navigate = useNavigate();
@@ -38,6 +58,7 @@ const Reader = () => {
 
   const book = books.find((b) => b.id === id);
   const totalPages = book?.total_pages || 100;
+  const fileUrl = (book as any)?.file_url || (book as any)?.url || (book as any)?.file || "";
 
   // Auto-hide UI when scrolling
   const handleScroll = useCallback(() => {
@@ -51,15 +72,12 @@ const Reader = () => {
 
   // Update progress when page changes
   useEffect(() => {
-    if (book && id) {
-      const progress = (currentPage / totalPages) * 100;
-      updateBook.mutate({ 
-        id, 
-        progress,
-        current_page: currentPage,
-      });
-    }
-  }, [currentPage, totalPages]);
+    if (!book || !id) return;
+    const denom = isPdf && numPages ? numPages : totalPages;
+    const progress = denom ? (currentPage / denom) * 100 : 0;
+
+    updateBook.mutate({ id, progress, current_page: currentPage });
+  }, [currentPage, totalPages, isPdf, numPages]);
 
   // Cleanup session on unmount
   useEffect(() => {
@@ -93,6 +111,152 @@ const Reader = () => {
     <blockquote>"Đọc sách là hành trình khám phá thế giới qua từng trang giấy."</blockquote>
     <p>Hy vọng bạn có những phút giây thư giãn cùng BookWorm! 📚</p>
   `;
+
+  // Determine file type
+  useEffect(() => {
+    const ext = fileUrl.split(".").pop()?.toLowerCase();
+    setIsPdf(ext === "pdf");
+    setIsEpub(ext === "epub");
+  }, [fileUrl]);
+
+  // Initialize EPUB rendering when needed
+  useEffect(() => {
+    if (!isEpub || !fileUrl || !epubRef.current) return;
+
+    const bookObj = ePub(fileUrl);
+    bookRef.current = bookObj;
+    const rendition = bookObj.renderTo(epubRef.current, {
+      width: "100%",
+      height: "100%",
+      spread: "none",
+    });
+    rendition.display();
+    renditionRef.current = rendition;
+
+    const onRelocated = () => {
+      // We don't know exact page count for EPUB easily; navigation buttons call rendition.prev/next
+    };
+
+    rendition.on("relocated", onRelocated);
+
+    return () => {
+      try {
+        rendition && rendition.destroy && rendition.destroy();
+        bookObj && bookObj.destroy && bookObj.destroy();
+      } catch (e) {
+        // ignore
+      }
+    };
+  }, [isEpub, fileUrl]);
+
+  // Try to prefetch PDF into a blob URL to avoid CORS/authorization issues when loading in <Document />
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let abort = false;
+
+    const tryFetch = async () => {
+      if (!isPdf || !fileUrl) return;
+      try {
+        // If fileUrl looks like a storage path (no protocol), request a signed URL
+        const isAbsolute = /^https?:\/\//i.test(fileUrl);
+        if (!isAbsolute) {
+          // Try createSignedUrl first (works for private buckets). Fallback to public URL.
+          const { data: signedData, error: signedError } = await supabase.storage
+            .from("book-files")
+            .createSignedUrl(fileUrl, 60);
+
+          if (signedError) {
+            console.warn("createSignedUrl failed, trying getPublicUrl:", signedError);
+            const { data: pubData } = supabase.storage.from("book-files").getPublicUrl(fileUrl);
+            if (pubData?.publicUrl) {
+              if (!abort) setPdfBlobUrl(pubData.publicUrl);
+              return;
+            }
+            throw signedError;
+          }
+
+          if (signedData?.signedUrl) {
+            if (!abort) setPdfBlobUrl(signedData.signedUrl);
+            return;
+          }
+        }
+
+        // If it's already an absolute URL or signed/public URL flow above didn't return, fetch and create blob URL
+        const res = await fetch(fileUrl, { credentials: "include" });
+        if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+        const blob = await res.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!abort) setPdfBlobUrl(objectUrl);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("PDF prefetch failed, will try direct URL in <Document>:", err);
+      }
+    };
+
+    tryFetch();
+
+    return () => {
+      abort = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [isPdf, fileUrl]);
+
+  // Highlights hook for saving highlights
+  const { addHighlight } = useHighlights(id);
+
+  // Capture selection on PDF text layer via onMouseUp handler (attached to container)
+  useEffect(() => {
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        setShowSelectionToolbar(false);
+        setSelectionText(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const saveSelection = async (color: "yellow" | "blue" | "red") => {
+    if (!selectionText || !id) return;
+    try {
+      const position = JSON.stringify({ page: currentPage });
+      await addHighlight.mutateAsync({
+        book_id: id,
+        content: selectionText,
+        note: null,
+        color,
+        position,
+        chapter: null,
+        page_number: currentPage,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("Failed to save highlight:", err);
+    } finally {
+      setShowSelectionToolbar(false);
+      setSelectionText(null);
+    }
+  };
+
+  const cancelSelection = () => {
+    setShowSelectionToolbar(false);
+    setSelectionText(null);
+    const sel = window.getSelection && window.getSelection();
+    sel && sel.removeAllRanges();
+  };
+
+  // Cleanup on unmount: clear timeout and revoke blob URL
+  useEffect(() => {
+    return () => {
+      if (hideUITimeout.current) {
+        clearTimeout(hideUITimeout.current);
+        hideUITimeout.current = null;
+      }
+      if (pdfBlobUrl && pdfBlobUrl.startsWith && pdfBlobUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(pdfBlobUrl);
+      }
+    };
+  }, [pdfBlobUrl]);
 
   return (
     <div 
@@ -240,18 +404,84 @@ const Reader = () => {
         className="px-6 py-20"
         onScroll={handleScroll}
       >
-        <article
-          className={cn(
-            "max-w-2xl mx-auto prose prose-lg",
-            fontFamily === "serif" ? "font-serif" : "font-sans",
-            currentTheme.text
+        <div className="max-w-3xl mx-auto">
+          {isPdf && fileUrl ? (
+            <div className="flex justify-center">
+              <div ref={pdfContainerRef} className="w-full flex justify-center relative" onMouseUp={(e) => {
+                try {
+                  const sel = window.getSelection && window.getSelection();
+                  if (!sel) return;
+                  const text = sel.toString().trim();
+                  if (!text || text.length < 2) return;
+
+                  const range = sel.getRangeAt(0);
+                  const container = pdfContainerRef.current;
+                  if (!range || !container) return;
+
+                  // Ensure selection is inside our PDF container
+                  const common = range.commonAncestorContainer;
+                  if (!container.contains(common.nodeType === 3 ? common.parentNode as Node : common)) return;
+
+                  // Compute bounding rect relative to container
+                  const rect = range.getBoundingClientRect();
+                  const containerRect = container.getBoundingClientRect();
+                  const top = rect.top - containerRect.top;
+                  const left = rect.left - containerRect.left + rect.width / 2; // center toolbar
+
+                  setSelectionText(text);
+                  setSelectionRect({ top: Math.max(8, top), left });
+                  setShowSelectionToolbar(true);
+                } catch (err) {
+                  // eslint-disable-next-line no-console
+                  console.warn("Selection handler error:", err);
+                }
+              }}>
+                <Document
+                  file={pdfBlobUrl ?? fileUrl}
+                  onLoadSuccess={(pdf) => {
+                    setNumPages(pdf.numPages);
+                    setCurrentPage(1);
+                  }}
+                  onLoadError={(err) => {
+                    // helpful debug in console when PDF fails to load
+                    // keep UI fallback intact
+                    // eslint-disable-next-line no-console
+                    console.error("PDF load error:", err);
+                  }}
+                >
+                  <Page pageNumber={currentPage} width={800} renderTextLayer={true} />
+                </Document>
+                {showSelectionToolbar && selectionRect && (
+                  <div
+                    className="absolute z-50 flex items-center gap-2 rounded-md bg-white/95 p-2 shadow"
+                    style={{ top: selectionRect.top, left: selectionRect.left, transform: "translate(-50%, -120%)" }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <button onClick={() => saveSelection("yellow")} className="h-6 w-6 rounded bg-yellow-300" aria-label="Yellow" />
+                    <button onClick={() => saveSelection("blue")} className="h-6 w-6 rounded bg-blue-300" aria-label="Blue" />
+                    <button onClick={() => saveSelection("red")} className="h-6 w-6 rounded bg-red-300" aria-label="Red" />
+                    <button onClick={cancelSelection} className="text-sm text-muted-foreground ml-2">Hủy</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : isEpub && fileUrl ? (
+            <div style={{ height: '80vh' }} ref={epubRef} />
+          ) : (
+            <article
+              className={cn(
+                "max-w-2xl mx-auto prose prose-lg",
+                fontFamily === "serif" ? "font-serif" : "font-sans",
+                currentTheme.text
+              )}
+              style={{
+                fontSize: `${fontSize}px`,
+                lineHeight: lineHeight,
+              }}
+              dangerouslySetInnerHTML={{ __html: sampleContent }}
+            />
           )}
-          style={{
-            fontSize: `${fontSize}px`,
-            lineHeight: lineHeight,
-          }}
-          dangerouslySetInnerHTML={{ __html: sampleContent }}
-        />
+        </div>
       </main>
 
       {/* Bottom bar */}
@@ -265,8 +495,8 @@ const Reader = () => {
         <div className="px-4 py-3">
           {/* Progress */}
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-            <span>Trang {currentPage}/{totalPages}</span>
-            <span>{Math.round((currentPage / totalPages) * 100)}%</span>
+            <span>Trang {currentPage}/{isPdf && numPages ? numPages : totalPages}</span>
+            <span>{Math.round((currentPage / (isPdf && numPages ? numPages : totalPages)) * 100)}%</span>
           </div>
           
           {/* Navigation */}
@@ -276,7 +506,8 @@ const Reader = () => {
               size="icon"
               onClick={(e) => {
                 e.stopPropagation();
-                setCurrentPage((p) => Math.max(1, p - 1));
+                if (isPdf) setCurrentPage((p) => Math.max(1, p - 1));
+                else if (isEpub && renditionRef.current) renditionRef.current.prev();
               }}
               disabled={currentPage <= 1}
             >
@@ -287,7 +518,7 @@ const Reader = () => {
               value={[currentPage]}
               onValueChange={([v]) => setCurrentPage(v)}
               min={1}
-              max={totalPages}
+              max={isPdf && numPages ? numPages : totalPages}
               step={1}
               className="flex-1"
               onClick={(e) => e.stopPropagation()}
@@ -298,9 +529,11 @@ const Reader = () => {
               size="icon"
               onClick={(e) => {
                 e.stopPropagation();
-                setCurrentPage((p) => Math.min(totalPages, p + 1));
+                if (isPdf && numPages) setCurrentPage((p) => Math.min(numPages, p + 1));
+                else if (isEpub && renditionRef.current) renditionRef.current.next();
+                else setCurrentPage((p) => Math.min(totalPages, p + 1));
               }}
-              disabled={currentPage >= totalPages}
+              disabled={currentPage >= (isPdf && numPages ? numPages : totalPages)}
             >
               <ChevronRight className="h-5 w-5" />
             </Button>

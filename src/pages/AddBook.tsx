@@ -52,10 +52,17 @@ const AddBook = () => {
       .toLowerCase();
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    
+    // Reset input để nếu chọn lại file cũ vẫn kích hoạt event
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
     if (!file || !user) return;
 
+    // 1. Validate định dạng
     const format = getFileFormat(file.name);
     if (!format) {
       toast({
@@ -66,6 +73,7 @@ const AddBook = () => {
       return;
     }
 
+    // 2. Validate dung lượng
     if (file.size > 50 * 1024 * 1024) {
       toast({
         title: "File quá lớn",
@@ -77,57 +85,63 @@ const AddBook = () => {
 
     setIsUploading(true);
     try {
-      // Upload file to storage
+      // 3. Xử lý tên file an toàn (Chỉ giữ ký tự a-z, 0-9)
       const cleanFileName = sanitizeFileName(file.name);
-      const filePath = `${user.id}/${Date.now()}-${cleanFileName}`;
-      console.log("Bắt đầu upload:", filePath);
+      // Tạo đường dẫn: user_id/timestamp_tenfile
+      const filePath = `${user.id}/${Date.now()}_${cleanFileName}`;
 
+      console.log("Đang upload lên path:", filePath);
+
+      // 4. Upload lên Storage
       const { error: uploadError } = await supabase.storage
-        .from("book-files")
+        .from("book-files") // Tên bucket phải khớp 100% với trên Supabase
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false,
-          contentType: file.type
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Lỗi Storage:", uploadError);
+        throw new Error(`Lỗi Storage: ${uploadError.message}`);
+      }
 
-      // Get file URL
-      const { data: urlData } = supabase.storage
-        .from("book-files")
-        .getPublicUrl(filePath);
-
-      // Extract title from filename
+      // 5. Chuẩn bị dữ liệu DB (Tránh dùng null)
       const title = file.name.replace(/\.(pdf|epub|txt)$/i, "").replace(/_/g, " ");
 
-      // Add book to database
+      console.log("Đang lưu vào Database...");
+
+      // 6. Gửi vào Database
       await addBook.mutateAsync({
-        title,
-        author: null,
-        description: null,
-        cover_url: null,
-        genre: null,
-        format,
+        title: title || "Sách không tên",
+        author: "Tác giả ẩn danh", // Dùng string thay vì null để an toàn
+        description: "",           // Dùng chuỗi rỗng thay vì null
+        cover_url: null,           // Cover null thì được vì thường là optional
+        genre: "General",
+        format, // 'pdf', 'epub', 'txt'
         file_url: filePath,
         status: "to_read",
         progress: 0,
-        current_position: null,
-        total_pages: null,
+        current_position: "",
+        total_pages: 0,
         current_page: 0,
-        estimated_time_remaining: null,
+        estimated_time_remaining: 0,
         is_from_library: false,
         open_library_key: null,
       });
 
       toast({
-        title: "Thêm sách thành công! 📚",
-        description: `"${title}" đã được thêm vào thư viện`,
+        title: "Thành công! ",
+        description: `Đã thêm sách "${title}"`,
       });
       navigate("/");
-    } catch (error) {
+
+    } catch (error: any) {
+      console.error("Lỗi chi tiết:", error);
+      
+      // QUAN TRỌNG: Hiển thị lỗi thật sự ra màn hình
       toast({
-        title: "Lỗi",
-        description: "Không thể tải lên sách",
+        title: "Thất bại",
+        description: error.message || "Có lỗi không xác định xảy ra",
         variant: "destructive",
       });
     } finally {

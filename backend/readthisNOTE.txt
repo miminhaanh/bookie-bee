@@ -1,0 +1,4 @@
+mở terminal ra,cd đến backend rồi chạy
+npm install express openai cors
+export OPENAI_API_KEY="điền API KEY vào đây cho tao!!"
+node backend/server.js

@@ -280,7 +280,7 @@ const NotificationSettings = () => {
                       Nhắc nhở đọc sách hàng ngày
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Tự động nhắc vào 9:00, 15:00, 21:00
+                      Tự động gửi thông báo nhắc bạn đọc sách mỗi ngày
                     </p>
                   </div>
                 </div>

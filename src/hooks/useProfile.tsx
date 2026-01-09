@@ -7,6 +7,10 @@ export interface Profile {
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
+  date_of_birth: string | null;
+  phone_number: string | null;
+  gender: string | null;
+  bio: string | null;
   current_streak: number;
   longest_streak: number;
   last_read_date: string | null;
@@ -42,10 +46,13 @@ export const useProfile = () => {
     mutationFn: async (updates: Partial<Profile>) => {
       if (!user?.id) throw new Error("No user");
       
+      // Use upsert with POST instead of update with PATCH to avoid CORS issues
       const { error } = await supabase
         .from("profiles")
-        .update(updates)
-        .eq("user_id", user.id);
+        .upsert(
+          { user_id: user.id, ...updates },
+          { onConflict: "user_id" }
+        );
 
       if (error) throw error;
     },

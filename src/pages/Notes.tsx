@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Search, Loader2, Filter, BookOpen } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Search, Loader2, Filter, BookOpen, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,10 +20,12 @@ const colorMap = {
 
 const Notes = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBookId, setSelectedBookId] = useState<string>("all");
+  const [searchParams] = useSearchParams();
+  const initialSelectedBookId = searchParams.get("bookId") ?? "all";
+  const [selectedBookId, setSelectedBookId] = useState<string>(initialSelectedBookId);
   
   const { user, loading: authLoading } = useAuth();
-  const { highlights, isLoading: highlightsLoading } = useHighlights();
+  const { highlights, isLoading: highlightsLoading, deleteHighlight } = useHighlights();
   const { books } = useBooks();
   const navigate = useNavigate();
 
@@ -127,10 +129,20 @@ const Notes = () => {
                     >
                       <div
                         className={cn(
-                          "rounded-lg p-3 mb-3",
+                          "relative rounded-lg p-3 mb-3",
                           colorMap[highlight.color]
                         )}
                       >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-1 top-1 h-8 w-8"
+                          onClick={() => deleteHighlight.mutate(highlight.id)}
+                          aria-label="Xóa highlight"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                         <p className="text-sm text-foreground leading-relaxed">
                           "{highlight.content}"
                         </p>

@@ -1,6 +1,16 @@
-import { useState, useEffect, useCallback, useRef, type MouseEvent as ReactMouseEvent } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Settings, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import {
+  ArrowLeft,
+  Bookmark,
+  Settings,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Minus,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
@@ -8,16 +18,54 @@ import { Label } from "@/components/ui/label";
 import { useBooks } from "@/hooks/useBooks";
 import { useAuth } from "@/hooks/useAuth";
 import { useReadingSession } from "@/hooks/useReadingSession";
-import { useHighlights } from "@/hooks/useHighlights";
+import { useHighlights, type Highlight as DbHighlight } from "@/hooks/useHighlights";
 import { cn } from "@/lib/utils";
 import ePub from "epubjs";
-import { Document, Page, pdfjs } from "react-pdf";
-// Local stylesheet with minimal rules for react-pdf text and annotation layers
-import 'react-pdf/dist/Page/TextLayer.css';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
 import { supabase } from "@/integrations/supabase/client";
+import {
+  ScrollMode,
+  SpecialZoomLevel,
+  Worker,
+  Viewer,
+  type DocumentLoadEvent,
+  type PageChangeEvent,
+} from "@react-pdf-viewer/core";
+import "@react-pdf-viewer/core/lib/styles/index.css";
+import {
+  highlightPlugin,
+  type HighlightArea,
+  type RenderHighlightTargetProps,
+  type RenderHighlightsProps,
+} from "@react-pdf-viewer/highlight";
+import "@react-pdf-viewer/highlight/lib/styles/index.css";
+import { scrollModePlugin } from "@react-pdf-viewer/scroll-mode";
+import { pageNavigationPlugin } from "@react-pdf-viewer/page-navigation";
+import "@react-pdf-viewer/page-navigation/lib/styles/index.css";
+import { zoomPlugin } from "@react-pdf-viewer/zoom";
+import "@react-pdf-viewer/zoom/lib/styles/index.css";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.js?url";
 
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+const getHighlightAreasFromDb = (h: DbHighlight): HighlightArea[] => {
+  if (!h.position) return [];
+  try {
+    const parsed = JSON.parse(h.position) as { highlightAreas?: HighlightArea[] };
+    return Array.isArray(parsed?.highlightAreas) ? parsed.highlightAreas : [];
+  } catch {
+    return [];
+  }
+};
+
+const colorToBackground = (color: DbHighlight["color"]) => {
+  switch (color) {
+    case "blue":
+      return "hsl(var(--highlight-blue))";
+    case "red":
+      return "hsl(var(--highlight-red))";
+    case "yellow":
+    default:
+      return "hsl(var(--highlight-yellow))";
+  }
+};
 
 type ReaderTheme = "light" | "dark" | "sepia" | "green";
 
@@ -36,29 +84,52 @@ const Reader = () => {
   const [fontFamily, setFontFamily] = useState<"sans" | "serif">("sans");
   const [lineHeight, setLineHeight] = useState(1.8);
   const [currentPage, setCurrentPage] = useState(1);
+  const [scrollMode, setScrollMode] = useState<ScrollMode>(ScrollMode.Vertical);
   const [isPdf, setIsPdf] = useState(false);
   const [isEpub, setIsEpub] = useState(false);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [hasVisitedPage, setHasVisitedPage] = useState(false);
+  const [deletingHighlightId, setDeletingHighlightId] = useState<string | null>(null);
+  const [pageHighlights, setPageHighlights] = useState<DbHighlight[]>([]);
+  const [isHighlightsOpen, setIsHighlightsOpen] = useState(false);
+  const [highlightsList, setHighlightsList] = useState<DbHighlight[]>([]);
+  const [isHighlightsLoading, setIsHighlightsLoading] = useState(false);
   const epubRef = useRef<HTMLDivElement | null>(null);
-  const renditionRef = useRef<any>(null);
-  const bookRef = useRef<any>(null);
-  const pdfContainerRef = useRef<HTMLDivElement | null>(null);
-  const [selectionText, setSelectionText] = useState<string | null>(null);
-  const [selectionRect, setSelectionRect] = useState<{ top: number; left: number } | null>(null);
-  const [showSelectionToolbar, setShowSelectionToolbar] = useState(false);
+  const renditionRef = useRef<unknown>(null);
+  const bookRef = useRef<unknown>(null);
+  const pdfWrapperRef = useRef<HTMLDivElement | null>(null);
+  const currentPageRef = useRef(currentPage);
   
   const hideUITimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { user, loading: authLoading } = useAuth();
   const { books, updateBook } = useBooks();
   const navigate = useNavigate();
+  const location = useLocation();
   
   // Start reading session tracking
   const { endSession } = useReadingSession(id || "");
 
   const book = books.find((b) => b.id === id);
   const totalPages = book?.total_pages || 100;
-  const fileUrl = (book as any)?.file_url || (book as any)?.url || (book as any)?.file || "";
+  const fileUrl = book?.file_url || "";
+
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  const currentTheme = themeStyles[theme];
+
+  // Sample content for demo (in real app, this would be parsed from EPUB/PDF)
+  const sampleContent = `
+    <h2>Chương 1: Khởi đầu</h2>
+    <p>Đây là nội dung mẫu để demo giao diện đọc sách. Trong ứng dụng thực tế, nội dung sẽ được parse từ file EPUB hoặc PDF.</p>
+    <p>BookWorm cung cấp trải nghiệm đọc sách tối ưu với nhiều tùy chọn cá nhân hóa. Bạn có thể điều chỉnh font chữ, kích thước, khoảng cách dòng và theme theo sở thích.</p>
+    <p>Tính năng highlight cho phép bạn đánh dấu những đoạn văn hay và thêm ghi chú cá nhân. Tất cả sẽ được lưu trữ và đồng bộ trên cloud.</p>
+    <p>Hệ thống tracking thời gian đọc giúp bạn theo dõi tiến độ và duy trì thói quen đọc sách hàng ngày. Streak sẽ được cập nhật khi bạn đọc ít nhất 5 phút mỗi ngày.</p>
+    <blockquote>"Đọc sách là hành trình khám phá thế giới qua từng trang giấy."</blockquote>
+    <p>Hy vọng bạn có những phút giây thư giãn cùng BookWorm! 📚</p>
+  `;
 
   // Auto-hide UI when scrolling
   const handleScroll = useCallback(() => {
@@ -86,38 +157,248 @@ const Reader = () => {
     };
   }, [endSession]);
 
-  if (!authLoading && !user) {
-    navigate("/auth", { replace: true });
-    return null;
-  }
-
-  if (!book) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const currentTheme = themeStyles[theme];
-
-  // Sample content for demo (in real app, this would be parsed from EPUB/PDF)
-  const sampleContent = `
-    <h2>Chương 1: Khởi đầu</h2>
-    <p>Đây là nội dung mẫu để demo giao diện đọc sách. Trong ứng dụng thực tế, nội dung sẽ được parse từ file EPUB hoặc PDF.</p>
-    <p>BookWorm cung cấp trải nghiệm đọc sách tối ưu với nhiều tùy chọn cá nhân hóa. Bạn có thể điều chỉnh font chữ, kích thước, khoảng cách dòng và theme theo sở thích.</p>
-    <p>Tính năng highlight cho phép bạn đánh dấu những đoạn văn hay và thêm ghi chú cá nhân. Tất cả sẽ được lưu trữ và đồng bộ trên cloud.</p>
-    <p>Hệ thống tracking thời gian đọc giúp bạn theo dõi tiến độ và duy trì thói quen đọc sách hàng ngày. Streak sẽ được cập nhật khi bạn đọc ít nhất 5 phút mỗi ngày.</p>
-    <blockquote>"Đọc sách là hành trình khám phá thế giới qua từng trang giấy."</blockquote>
-    <p>Hy vọng bạn có những phút giây thư giãn cùng BookWorm! 📚</p>
-  `;
-
   // Determine file type
   useEffect(() => {
     const ext = fileUrl.split(".").pop()?.toLowerCase();
     setIsPdf(ext === "pdf");
     setIsEpub(ext === "epub");
   }, [fileUrl]);
+
+  // Highlights hook for saving highlights
+  const { addHighlight } = useHighlights(id);
+
+  // Fetch highlights for the current page ONLY after user actually navigates to a page
+  useEffect(() => {
+    if (!user?.id || !id || !isPdf || !hasVisitedPage) return;
+
+    let active = true;
+    const run = async () => {
+      const { data, error } = await supabase
+        .from("highlights")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("book_id", id)
+        .eq("page_number", currentPage)
+        .order("created_at", { ascending: false });
+
+      if (!active) return;
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to load highlights:", error);
+        setPageHighlights([]);
+        return;
+      }
+      setPageHighlights((data ?? []) as DbHighlight[]);
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [user?.id, id, isPdf, hasVisitedPage, currentPage]);
+
+  // Fetch all highlights for the book when opening the bookmark list
+  useEffect(() => {
+    if (!isHighlightsOpen || !user?.id || !id) return;
+
+    let active = true;
+    setIsHighlightsLoading(true);
+
+    const run = async () => {
+      const { data, error } = await supabase
+        .from("highlights")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("book_id", id)
+        .order("page_number", { ascending: true })
+        .order("created_at", { ascending: false });
+
+      if (!active) return;
+
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to load highlights list:", error);
+        setHighlightsList([]);
+        setIsHighlightsLoading(false);
+        return;
+      }
+
+      setHighlightsList((data ?? []) as DbHighlight[]);
+      setIsHighlightsLoading(false);
+    };
+
+    void run();
+    return () => {
+      active = false;
+    };
+  }, [id, isHighlightsOpen, user?.id]);
+
+  const savePdfHighlight = useCallback(
+    async (
+      props: Pick<RenderHighlightTargetProps, "highlightAreas" | "selectedText" | "selectionData" | "cancel">,
+      color: DbHighlight["color"],
+    ) => {
+      if (!id) {
+        props.cancel();
+        return;
+      }
+
+      const text = (props.selectedText ?? "").trim();
+      if (!text) {
+        props.cancel();
+        return;
+      }
+
+      const pageNumber = (props.highlightAreas?.[0]?.pageIndex ?? currentPageRef.current - 1) + 1;
+      setHasVisitedPage(true);
+
+      try {
+        const inserted = await addHighlight.mutateAsync({
+          book_id: id,
+          content: text,
+          note: null,
+          color,
+          position: JSON.stringify({
+            highlightAreas: props.highlightAreas,
+            selectionData: props.selectionData ?? null,
+          }),
+          chapter: null,
+          page_number: pageNumber,
+        });
+
+        if (inserted.page_number === currentPageRef.current) {
+          setPageHighlights((prev) => [inserted, ...prev]);
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to save highlight:", err);
+      } finally {
+        props.cancel();
+      }
+    },
+    [addHighlight, id],
+  );
+
+  const renderHighlightTarget = useCallback(
+    (props: RenderHighlightTargetProps) => (
+      <div
+        className="flex items-center gap-2 rounded-md border border-border bg-background/95 px-2 py-1 shadow-sm"
+        style={{
+          position: "absolute",
+          left: `${props.selectionRegion.left}%`,
+          top: `${props.selectionRegion.top + props.selectionRegion.height}%`,
+          transform: "translate(0, 8px)",
+          zIndex: 20,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          aria-label="Highlight vàng"
+          className="h-5 w-5 rounded-full border border-border bg-highlight-yellow"
+          onClick={() => void savePdfHighlight(props, "yellow")}
+        />
+        <button
+          type="button"
+          aria-label="Highlight xanh"
+          className="h-5 w-5 rounded-full border border-border bg-highlight-blue"
+          onClick={() => void savePdfHighlight(props, "blue")}
+        />
+        <button
+          type="button"
+          aria-label="Highlight đỏ"
+          className="h-5 w-5 rounded-full border border-border bg-highlight-red"
+          onClick={() => void savePdfHighlight(props, "red")}
+        />
+      </div>
+    ),
+    [savePdfHighlight],
+  );
+
+  const renderHighlights = useCallback(
+    (props: RenderHighlightsProps) => (
+      <div>
+        {pageHighlights.map((h) => {
+          const areas = getHighlightAreasFromDb(h).filter((a) => a.pageIndex === props.pageIndex);
+          if (areas.length === 0) return null;
+
+          const bg = colorToBackground(h.color);
+          return (
+            <div key={h.id}>
+              {areas.map((area, idx) => (
+                <div
+                  key={`${h.id}-${idx}`}
+                  style={{
+                    ...props.getCssProperties(area, props.rotation),
+                    background: bg,
+                    opacity: 0.45,
+                  }}
+                />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    ),
+    [pageHighlights],
+  );
+
+  // Plugin factories from @react-pdf-viewer can use hooks internally.
+  // Call them at the top level (not inside useMemo/useEffect).
+  const highlightPluginInstance = highlightPlugin({ renderHighlightTarget, renderHighlights });
+  const scrollModePluginInstance = scrollModePlugin();
+  const pageNavigationPluginInstance = pageNavigationPlugin();
+  const zoomPluginInstance = zoomPlugin();
+
+  const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
+
+  const didJumpToQueryPageRef = useRef(false);
+  const queryPageRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const raw = new URLSearchParams(location.search).get("page");
+    const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+    queryPageRef.current = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    didJumpToQueryPageRef.current = false;
+  }, [location.search]);
+
+  const handlePdfDocumentLoad = useCallback(
+    (e: DocumentLoadEvent) => {
+      setNumPages(e.doc.numPages);
+
+      const requestedPage = queryPageRef.current;
+      if (!requestedPage || didJumpToQueryPageRef.current) return;
+
+      const clamped = Math.min(Math.max(requestedPage, 1), e.doc.numPages);
+      try {
+        // jumpToPage uses zero-based index
+        pageNavigationPluginInstance.jumpToPage(clamped - 1);
+        setCurrentPage(clamped);
+        setHasVisitedPage(true);
+        didJumpToQueryPageRef.current = true;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to jump to TOC page:", err);
+      }
+    },
+    [pageNavigationPluginInstance],
+  );
+
+  const handlePdfPageChange = useCallback(
+    (e: PageChangeEvent) => {
+      handleScroll();
+      setHasVisitedPage(true);
+      setCurrentPage(e.currentPage + 1);
+    },
+    [handleScroll],
+  );
+
+  const shouldRedirectToAuth = !authLoading && !user;
+
+  useEffect(() => {
+    if (!shouldRedirectToAuth) return;
+    navigate("/auth", { replace: true });
+  }, [navigate, shouldRedirectToAuth]);
 
   // Initialize EPUB rendering when needed
   useEffect(() => {
@@ -141,8 +422,10 @@ const Reader = () => {
 
     return () => {
       try {
-        rendition && rendition.destroy && rendition.destroy();
-        bookObj && bookObj.destroy && bookObj.destroy();
+        if (rendition && typeof rendition.destroy === "function") rendition.destroy();
+        if (bookObj && typeof (bookObj as unknown as { destroy?: unknown }).destroy === "function") {
+          (bookObj as unknown as { destroy: () => void }).destroy();
+        }
       } catch (e) {
         // ignore
       }
@@ -157,28 +440,14 @@ const Reader = () => {
     const tryFetch = async () => {
       if (!isPdf || !fileUrl) return;
       try {
-        // If fileUrl looks like a storage path (no protocol), request a signed URL
         const isAbsolute = /^https?:\/\//i.test(fileUrl);
         if (!isAbsolute) {
-          // Try createSignedUrl first (works for private buckets). Fallback to public URL.
-          const { data: signedData, error: signedError } = await supabase.storage
-            .from("book-files")
-            .createSignedUrl(fileUrl, 60);
-
-          if (signedError) {
-            console.warn("createSignedUrl failed, trying getPublicUrl:", signedError);
-            const { data: pubData } = supabase.storage.from("book-files").getPublicUrl(fileUrl);
-            if (pubData?.publicUrl) {
-              if (!abort) setPdfBlobUrl(pubData.publicUrl);
-              return;
-            }
-            throw signedError;
-          }
-
-          if (signedData?.signedUrl) {
-            if (!abort) setPdfBlobUrl(signedData.signedUrl);
-            return;
-          }
+          // Prefer downloading via Supabase Storage API (works for private buckets and avoids signed URL expiry)
+          const { data, error } = await supabase.storage.from("book-files").download(fileUrl);
+          if (error) throw error;
+          objectUrl = URL.createObjectURL(data);
+          if (!abort) setPdfBlobUrl(objectUrl);
+          return;
         }
 
         // If it's already an absolute URL or signed/public URL flow above didn't return, fetch and create blob URL
@@ -201,50 +470,6 @@ const Reader = () => {
     };
   }, [isPdf, fileUrl]);
 
-  // Highlights hook for saving highlights
-  const { addHighlight } = useHighlights(id);
-
-  // Capture selection on PDF text layer via onMouseUp handler (attached to container)
-  useEffect(() => {
-    const onKeyDown = (ev: KeyboardEvent) => {
-      if (ev.key === "Escape") {
-        setShowSelectionToolbar(false);
-        setSelectionText(null);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  const saveSelection = async (color: "yellow" | "blue" | "red") => {
-    if (!selectionText || !id) return;
-    try {
-      const position = JSON.stringify({ page: currentPage });
-      await addHighlight.mutateAsync({
-        book_id: id,
-        content: selectionText,
-        note: null,
-        color,
-        position,
-        chapter: null,
-        page_number: currentPage,
-      });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn("Failed to save highlight:", err);
-    } finally {
-      setShowSelectionToolbar(false);
-      setSelectionText(null);
-    }
-  };
-
-  const cancelSelection = () => {
-    setShowSelectionToolbar(false);
-    setSelectionText(null);
-    const sel = window.getSelection && window.getSelection();
-    sel && sel.removeAllRanges();
-  };
-
   // Cleanup on unmount: clear timeout and revoke blob URL
   useEffect(() => {
     return () => {
@@ -259,14 +484,55 @@ const Reader = () => {
   }, [pdfBlobUrl]);
 
   return (
-    <div 
+    <div
       className={cn(
-        "min-h-screen transition-colors duration-300",
+        "relative h-dvh w-full overflow-hidden transition-colors duration-300",
         currentTheme.bg,
-        currentTheme.text
+        currentTheme.text,
       )}
       onClick={handleTap}
     >
+      {/* Book layer (background) */}
+      <div className="absolute inset-0 z-0">
+        {shouldRedirectToAuth ? null : !book ? (
+          <div className="flex h-full w-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : isPdf && fileUrl ? (
+          <div ref={pdfWrapperRef} className="h-full w-full">
+            <Worker workerUrl={pdfWorkerUrl}>
+              <div className="h-full w-full">
+                <Viewer
+                  fileUrl={pdfBlobUrl ?? fileUrl}
+                  onDocumentLoad={handlePdfDocumentLoad}
+                  onPageChange={handlePdfPageChange}
+                  scrollMode={scrollMode}
+                  defaultScale={SpecialZoomLevel.PageFit}
+                  plugins={[highlightPluginInstance, zoomPluginInstance, scrollModePluginInstance, pageNavigationPluginInstance]}
+                />
+              </div>
+            </Worker>
+          </div>
+        ) : isEpub && fileUrl ? (
+          <div className="h-full w-full" ref={epubRef} />
+        ) : (
+          <div className="h-full w-full overflow-auto px-4 py-14" onScroll={handleScroll}>
+            <article
+              className={cn(
+                "max-w-2xl mx-auto prose prose-lg",
+                fontFamily === "serif" ? "font-serif" : "font-sans",
+                currentTheme.text,
+              )}
+              style={{
+                fontSize: `${fontSize}px`,
+                lineHeight: lineHeight,
+              }}
+              dangerouslySetInnerHTML={{ __html: sampleContent }}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Top bar */}
       <header 
         className={cn(
@@ -275,7 +541,7 @@ const Reader = () => {
           "bg-background/80 backdrop-blur-sm border-b border-border"
         )}
       >
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-2 py-1.5">
           <Button 
             variant="ghost" 
             size="icon"
@@ -285,29 +551,158 @@ const Reader = () => {
               navigate(-1);
             }}
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           
           <h1 className="text-sm font-medium truncate max-w-[200px]">
             {book.title}
           </h1>
 
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Settings className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent onClick={(e) => e.stopPropagation()}>
-              <SheetHeader>
-                <SheetTitle>Cài đặt đọc</SheetTitle>
-              </SheetHeader>
+          <div className="flex items-center gap-2">
+            <Sheet open={isHighlightsOpen} onOpenChange={setIsHighlightsOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Xem highlights"
+                >
+                  <Bookmark className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <SheetHeader>
+                  <SheetTitle>Highlights</SheetTitle>
+                </SheetHeader>
+
+                <div className="mt-6 flex-1 space-y-3 overflow-y-auto pr-1">
+                  {isHighlightsLoading ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : highlightsList.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Chưa có highlight nào.</p>
+                  ) : (
+                    highlightsList.map((h) => (
+                      <button
+                        key={h.id}
+                        type="button"
+                        className="relative w-full rounded-lg border border-border border-l-4 p-3 text-left transition-colors hover:bg-muted"
+                        style={{ borderLeftColor: colorToBackground(h.color) }}
+                        onClick={() => {
+                          if (!isPdf) return;
+                          const pageNumberFromDb = h.page_number;
+                          if (!pageNumberFromDb) return;
+
+                          // jumpToPage uses a zero-based page index, while page_number in DB is usually 1-based
+                          const zeroBasedPageIndex = Math.max(0, pageNumberFromDb - 1);
+                          pageNavigationPluginInstance.jumpToPage(zeroBasedPageIndex);
+                          setCurrentPage(pageNumberFromDb);
+                          setHasVisitedPage(true);
+                          setIsHighlightsOpen(false);
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted-foreground/10 hover:text-foreground disabled:opacity-50"
+                          aria-label="Xoá highlight"
+                          disabled={deletingHighlightId === h.id}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void (async () => {
+                              try {
+                                setDeletingHighlightId(h.id);
+                                const { error } = await supabase
+                                  .from("highlights")
+                                  .delete()
+                                  .eq("id", h.id);
+                                if (error) throw error;
+
+                                setHighlightsList((prev) => prev.filter((x) => x.id !== h.id));
+                                setPageHighlights((prev) => prev.filter((x) => x.id !== h.id));
+                              } catch (err) {
+                                // eslint-disable-next-line no-console
+                                console.warn("Failed to delete highlight:", err);
+                              } finally {
+                                setDeletingHighlightId(null);
+                              }
+                            })();
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>Trang {h.page_number ?? "-"}</span>
+                        </div>
+                        <p className="mt-2 text-sm">{h.content}</p>
+                        {h.note ? (
+                          <p className="mt-2 text-sm text-muted-foreground">{h.note}</p>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Cài đặt đọc"
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent onClick={(e) => e.stopPropagation()}>
+                <SheetHeader>
+                  <SheetTitle>Cài đặt đọc</SheetTitle>
+                </SheetHeader>
               
               <div className="mt-6 space-y-6">
+                {/* Reading mode (PDF only) */}
+                {isPdf ? (
+                  <div>
+                    <Label className="text-sm font-medium">Chế độ đọc</Label>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScrollMode(ScrollMode.Vertical);
+                          scrollModePluginInstance.switchScrollMode(ScrollMode.Vertical);
+                        }}
+                        className={cn(
+                          "flex-1 rounded-lg border-2 p-3 text-sm transition-all",
+                          scrollMode === ScrollMode.Vertical
+                            ? "border-primary bg-primary/10"
+                            : "border-border",
+                        )}
+                      >
+                        Cuộn dọc
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setScrollMode(ScrollMode.Horizontal);
+                          scrollModePluginInstance.switchScrollMode(ScrollMode.Horizontal);
+                        }}
+                        className={cn(
+                          "flex-1 rounded-lg border-2 p-3 text-sm transition-all",
+                          scrollMode === ScrollMode.Horizontal
+                            ? "border-primary bg-primary/10"
+                            : "border-border",
+                        )}
+                      >
+                        Lướt ngang
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Theme */}
                 <div>
                   <Label className="text-sm font-medium">Theme</Label>
@@ -394,95 +789,11 @@ const Reader = () => {
                   />
                 </div>
               </div>
-            </SheetContent>
-          </Sheet>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </header>
-
-      {/* Content */}
-      <main 
-        className="px-6 py-20"
-        onScroll={handleScroll}
-      >
-        <div className="max-w-3xl mx-auto">
-          {isPdf && fileUrl ? (
-            <div className="flex justify-center">
-              <div ref={pdfContainerRef} className="w-full flex justify-center relative" onMouseUp={(e) => {
-                try {
-                  const sel = window.getSelection && window.getSelection();
-                  if (!sel) return;
-                  const text = sel.toString().trim();
-                  if (!text || text.length < 2) return;
-
-                  const range = sel.getRangeAt(0);
-                  const container = pdfContainerRef.current;
-                  if (!range || !container) return;
-
-                  // Ensure selection is inside our PDF container
-                  const common = range.commonAncestorContainer;
-                  if (!container.contains(common.nodeType === 3 ? common.parentNode as Node : common)) return;
-
-                  // Compute bounding rect relative to container
-                  const rect = range.getBoundingClientRect();
-                  const containerRect = container.getBoundingClientRect();
-                  const top = rect.top - containerRect.top;
-                  const left = rect.left - containerRect.left + rect.width / 2; // center toolbar
-
-                  setSelectionText(text);
-                  setSelectionRect({ top: Math.max(8, top), left });
-                  setShowSelectionToolbar(true);
-                } catch (err) {
-                  // eslint-disable-next-line no-console
-                  console.warn("Selection handler error:", err);
-                }
-              }}>
-                <Document
-                  file={pdfBlobUrl ?? fileUrl}
-                  onLoadSuccess={(pdf) => {
-                    setNumPages(pdf.numPages);
-                    setCurrentPage(1);
-                  }}
-                  onLoadError={(err) => {
-                    // helpful debug in console when PDF fails to load
-                    // keep UI fallback intact
-                    // eslint-disable-next-line no-console
-                    console.error("PDF load error:", err);
-                  }}
-                >
-                  <Page pageNumber={currentPage} width={800} renderTextLayer={true} />
-                </Document>
-                {showSelectionToolbar && selectionRect && (
-                  <div
-                    className="absolute z-50 flex items-center gap-2 rounded-md bg-white/95 p-2 shadow"
-                    style={{ top: selectionRect.top, left: selectionRect.left, transform: "translate(-50%, -120%)" }}
-                    onMouseDown={(e) => e.stopPropagation()}
-                  >
-                    <button onClick={() => saveSelection("yellow")} className="h-6 w-6 rounded bg-yellow-300" aria-label="Yellow" />
-                    <button onClick={() => saveSelection("blue")} className="h-6 w-6 rounded bg-blue-300" aria-label="Blue" />
-                    <button onClick={() => saveSelection("red")} className="h-6 w-6 rounded bg-red-300" aria-label="Red" />
-                    <button onClick={cancelSelection} className="text-sm text-muted-foreground ml-2">Hủy</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : isEpub && fileUrl ? (
-            <div style={{ height: '80vh' }} ref={epubRef} />
-          ) : (
-            <article
-              className={cn(
-                "max-w-2xl mx-auto prose prose-lg",
-                fontFamily === "serif" ? "font-serif" : "font-sans",
-                currentTheme.text
-              )}
-              style={{
-                fontSize: `${fontSize}px`,
-                lineHeight: lineHeight,
-              }}
-              dangerouslySetInnerHTML={{ __html: sampleContent }}
-            />
-          )}
-        </div>
-      </main>
 
       {/* Bottom bar */}
       <footer 
@@ -492,51 +803,193 @@ const Reader = () => {
           "bg-background/80 backdrop-blur-sm border-t border-border"
         )}
       >
-        <div className="px-4 py-3">
+        <div className="px-2 py-1.5">
           {/* Progress */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
             <span>Trang {currentPage}/{isPdf && numPages ? numPages : totalPages}</span>
             <span>{Math.round((currentPage / (isPdf && numPages ? numPages : totalPages)) * 100)}%</span>
           </div>
           
           {/* Navigation */}
           <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isPdf) setCurrentPage((p) => Math.max(1, p - 1));
-                else if (isEpub && renditionRef.current) renditionRef.current.prev();
-              }}
-              disabled={currentPage <= 1}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </Button>
-            
-            <Slider
-              value={[currentPage]}
-              onValueChange={([v]) => setCurrentPage(v)}
-              min={1}
-              max={isPdf && numPages ? numPages : totalPages}
-              step={1}
-              className="flex-1"
-              onClick={(e) => e.stopPropagation()}
-            />
-            
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isPdf && numPages) setCurrentPage((p) => Math.min(numPages, p + 1));
-                else if (isEpub && renditionRef.current) renditionRef.current.next();
-                else setCurrentPage((p) => Math.min(totalPages, p + 1));
-              }}
-              disabled={currentPage >= (isPdf && numPages ? numPages : totalPages)}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Button>
+            {isPdf ? (
+              scrollMode === ScrollMode.Horizontal ? (
+                <div
+                  className="flex w-full items-center justify-between"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Trang trước"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pageNavigationPluginInstance.jumpToPreviousPage();
+                    }}
+                    disabled={currentPage <= 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <ZoomOut>
+                      {(props) => (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Thu nhỏ"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            props.onClick();
+                          }}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </ZoomOut>
+
+                    <CurrentScale>
+                      {(props) => (
+                        <div
+                          className="flex h-9 min-w-14 items-center justify-center rounded-md border border-border bg-background px-2 text-xs tabular-nums"
+                          aria-label="Mức zoom"
+                        >
+                          {Math.round(props.scale * 100)}%
+                        </div>
+                      )}
+                    </CurrentScale>
+
+                    <ZoomIn>
+                      {(props) => (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Phóng to"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            props.onClick();
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </ZoomIn>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Trang sau"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pageNavigationPluginInstance.jumpToNextPage();
+                    }}
+                    disabled={!!numPages && currentPage >= numPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <ZoomOut>
+                      {(props) => (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Thu nhỏ"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            props.onClick();
+                          }}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </ZoomOut>
+
+                    <CurrentScale>
+                      {(props) => (
+                        <div
+                          className="flex h-9 min-w-14 items-center justify-center rounded-md border border-border bg-background px-2 text-xs tabular-nums"
+                          aria-label="Mức zoom"
+                        >
+                          {Math.round(props.scale * 100)}%
+                        </div>
+                      )}
+                    </CurrentScale>
+
+                    <ZoomIn>
+                      {(props) => (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Phóng to"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            props.onClick();
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </ZoomIn>
+                  </div>
+                </div>
+              )
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (
+                      isEpub &&
+                      renditionRef.current &&
+                      typeof (renditionRef.current as { prev?: unknown }).prev === "function"
+                    ) {
+                      (renditionRef.current as { prev: () => void }).prev();
+                    }
+                  }}
+                  disabled={currentPage <= 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+
+                <Slider
+                  value={[currentPage]}
+                  onValueChange={([v]) => {
+                    setCurrentPage(v);
+                  }}
+                  min={1}
+                  max={totalPages}
+                  step={1}
+                  className="flex-1"
+                  onClick={(e) => e.stopPropagation()}
+                />
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (
+                      isEpub &&
+                      renditionRef.current &&
+                      typeof (renditionRef.current as { next?: unknown }).next === "function"
+                    ) {
+                      (renditionRef.current as { next: () => void }).next();
+                    } else {
+                      setCurrentPage((p) => Math.min(totalPages, p + 1));
+                    }
+                  }}
+                  disabled={currentPage >= totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </footer>

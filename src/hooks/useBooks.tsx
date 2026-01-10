@@ -1,9 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import type { Json } from "@/integrations/supabase/types";
 
 export type BookStatus = "reading" | "completed" | "to_read";
 export type BookFormat = "pdf" | "epub" | "txt";
+
+export interface TocItem {
+  title: string;
+  page: number | null;
+  items: TocItem[];
+}
 
 export interface Book {
   id: string;
@@ -23,6 +30,8 @@ export interface Book {
   estimated_time_remaining: number | null;
   is_from_library: boolean;
   open_library_key: string | null;
+  toc?: Json | null;
+  summary?: string | null;
   created_at: string;
   updated_at: string;
 }

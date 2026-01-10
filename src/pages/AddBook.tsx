@@ -8,6 +8,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBooks, type BookFormat } from "@/hooks/useBooks";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.js?url";
+
+GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 
 interface OpenLibraryBook {
   key: string;
@@ -18,6 +22,100 @@ interface OpenLibraryBook {
   subject?: string[];
 }
 
+const FILES_BUCKET = "book-files";
+// Bucket for cover images. Create this bucket in Supabase Storage and allow image/* MIME types.
+const COVERS_BUCKET = import.meta.env.VITE_SUPABASE_COVERS_BUCKET || "book-covers";
+
+type RenderedCover = {
+  blob: Blob;
+  contentType: string;
+  extension: "png" | "jpg";
+};
+
+const renderPdfFirstPageToCoverBlob = async (pdfFile: File): Promise<RenderedCover> => {
+  const arrayBuffer = await pdfFile.arrayBuffer();
+  const loadingTask = getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+
+  try {
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.6 });
+
+    const canvas = document.createElement("canvas");
+    const canvasContext = canvas.getContext("2d", { alpha: false });
+    if (!canvasContext) throw new Error("Không thể khởi tạo canvas");
+
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+
+    const renderTask = page.render({ canvasContext, viewport });
+    await renderTask.promise;
+
+    // Prefer PNG for best compatibility. Fall back to JPEG if needed.
+    const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (pngBlob) return { blob: pngBlob, contentType: "image/png", extension: "png" };
+
+    const jpgBlob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.86)
+    );
+    if (jpgBlob) return { blob: jpgBlob, contentType: "image/jpeg", extension: "jpg" };
+
+    throw new Error("Không thể tạo ảnh bìa (canvas.toBlob thất bại)");
+  } finally {
+    try {
+      await pdf.destroy();
+    } catch {
+      // ignore cleanup errors
+    }
+  }
+};
+
+const extractPdfToc = async (pdfFile: File) => {
+  const arrayBuffer = await pdfFile.arrayBuffer();
+  // Sử dụng getDocument giống như hàm tạo cover
+  const loadingTask = getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+
+  try {
+    const outline = await pdf.getOutline();
+    if (!outline || outline.length === 0) return null;
+
+    // Hàm đệ quy xử lý cây mục lục
+    const processItems = async (items: any[]): Promise<any[]> => {
+      return Promise.all(items.map(async (item) => {
+        let pageNumber = null;
+        if (item.dest) {
+          let dest = item.dest;
+          // Nếu dest là string (Named Destination), cần resolve ra mảng Ref
+          if (typeof dest === 'string') {
+            dest = await pdf.getDestination(dest);
+          }
+          // Lấy số trang từ Ref
+          if (Array.isArray(dest) && dest[0]) {
+            const pageIndex = await pdf.getPageIndex(dest[0]);
+            pageNumber = pageIndex + 1; // Index bắt đầu từ 0 nên phải +1
+          }
+        }
+        return {
+          title: item.title,
+          page: pageNumber,
+          items: item.items && item.items.length > 0 
+            ? await processItems(item.items) 
+            : []
+        };
+      }));
+    };
+
+    return await processItems(outline);
+  } catch (error) {
+    console.warn("Lỗi trích xuất TOC:", error);
+    return null;
+  } finally {
+    // Dọn dẹp bộ nhớ
+    try { await pdf.destroy(); } catch {}
+  }
+};
+
 const AddBook = () => {
   const [activeTab, setActiveTab] = useState("upload");
   const [isUploading, setIsUploading] = useState(false);
@@ -27,7 +125,7 @@ const AddBook = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, loading: authLoading } = useAuth();
-  const { addBook } = useBooks();
+  const { addBook, updateBook } = useBooks();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -52,10 +150,17 @@ const AddBook = () => {
       .toLowerCase();
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    
+    // Reset input để nếu chọn lại file cũ vẫn kích hoạt event
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
     if (!file || !user) return;
 
+    // 1. Validate định dạng
     const format = getFileFormat(file.name);
     if (!format) {
       toast({
@@ -66,6 +171,7 @@ const AddBook = () => {
       return;
     }
 
+    // 2. Validate dung lượng
     if (file.size > 50 * 1024 * 1024) {
       toast({
         title: "File quá lớn",
@@ -77,57 +183,115 @@ const AddBook = () => {
 
     setIsUploading(true);
     try {
-      // Upload file to storage
+      // 3. Xử lý tên file an toàn (Chỉ giữ ký tự a-z, 0-9)
       const cleanFileName = sanitizeFileName(file.name);
-      const filePath = `${user.id}/${Date.now()}-${cleanFileName}`;
-      console.log("Bắt đầu upload:", filePath);
+      // Tạo đường dẫn: user_id/timestamp_tenfile
+      const filePath = `${user.id}/${Date.now()}_${cleanFileName}`;
 
+      console.log("Đang upload lên path:", filePath);
+
+      // 4. Upload lên Storage
       const { error: uploadError } = await supabase.storage
-        .from("book-files")
+        .from(FILES_BUCKET) // Tên bucket phải khớp 100% với trên Supabase
         .upload(filePath, file, {
           cacheControl: '3600',
           upsert: false,
-          contentType: file.type
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Lỗi Storage:", uploadError);
+        throw new Error(`Lỗi Storage: ${uploadError.message}`);
+      }
 
-      // Get file URL
-      const { data: urlData } = supabase.storage
-        .from("book-files")
-        .getPublicUrl(filePath);
-
-      // Extract title from filename
+      // 5. Chuẩn bị dữ liệu DB (Tránh dùng null)
       const title = file.name.replace(/\.(pdf|epub|txt)$/i, "").replace(/_/g, " ");
 
-      // Add book to database
-      await addBook.mutateAsync({
-        title,
-        author: null,
-        description: null,
-        cover_url: null,
-        genre: null,
-        format,
+      console.log("Đang lưu vào Database...");
+
+      let extractedToc = null;
+
+      if (format === 'pdf') {
+        console.log("Đang trích xuất mục lục...");
+        // Gọi hàm vừa viết ở Bước 1
+        extractedToc = await extractPdfToc(file);
+        console.log("Mục lục trích xuất:", extractedToc);
+        try {
+           const ab = await file.arrayBuffer();
+           const pdf = await getDocument({ data: ab }).promise;
+           pdf.destroy();
+        } catch {}
+      }
+
+      // 6. Gửi vào Database
+      const createdBook = await addBook.mutateAsync({
+        title: title || "Sách không tên",
+        author: "Tác giả ẩn danh", // Dùng string thay vì null để an toàn
+        description: "",           // Dùng chuỗi rỗng thay vì null
+        cover_url: null,           // sẽ update sau (nếu PDF)
+        genre: "General",
+        format, // 'pdf', 'epub', 'txt'
         file_url: filePath,
         status: "to_read",
         progress: 0,
-        current_position: null,
-        total_pages: null,
+        current_position: "",
+        total_pages: 0,
         current_page: 0,
-        estimated_time_remaining: null,
+        toc: extractedToc,
+        estimated_time_remaining: 0,
         is_from_library: false,
         open_library_key: null,
       });
 
+      // 7. Nếu là PDF: tạo ảnh bìa từ trang 1 và cập nhật cover_url cho cuốn vừa tạo
+      if (format === "pdf") {
+        try {
+          const cover = await renderPdfFirstPageToCoverBlob(file);
+          const baseName = cleanFileName.replace(/\.pdf$/i, "");
+          const coverPath = `${user.id}/${Date.now()}_${baseName}.${cover.extension}`;
+
+          const { error: coverUploadError } = await supabase.storage
+            .from(COVERS_BUCKET)
+            .upload(coverPath, cover.blob, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: cover.contentType,
+            });
+
+          if (coverUploadError) throw new Error(coverUploadError.message);
+
+          const { data: coverPub } = supabase.storage
+            .from(COVERS_BUCKET)
+            .getPublicUrl(coverPath);
+
+          const coverUrl = coverPub.publicUrl;
+
+          await updateBook.mutateAsync({
+            id: createdBook.id,
+            cover_url: coverUrl,
+          });
+        } catch (err: any) {
+          console.warn("Không thể tạo/cập nhật ảnh bìa tự động từ PDF:", err);
+          toast({
+            title: "Không thể tạo ảnh bìa",
+            description:
+              "Sách đã được thêm, nhưng chưa có ảnh bìa tự động. Hãy kiểm tra bucket book-covers (hoặc VITE_SUPABASE_COVERS_BUCKET) và Allowed MIME types image/*.",
+          });
+        }
+      }
+
       toast({
-        title: "Thêm sách thành công! 📚",
-        description: `"${title}" đã được thêm vào thư viện`,
+        title: "Thành công! ",
+        description: `Đã thêm sách "${title}"`,
       });
       navigate("/");
-    } catch (error) {
+
+    } catch (error: any) {
+      console.error("Lỗi chi tiết:", error);
+      
+      // QUAN TRỌNG: Hiển thị lỗi thật sự ra màn hình
       toast({
-        title: "Lỗi",
-        description: "Không thể tải lên sách",
+        title: "Thất bại",
+        description: error.message || "Có lỗi không xác định xảy ra",
         variant: "destructive",
       });
     } finally {

@@ -30,8 +30,10 @@ export type Database = {
           is_from_library: boolean | null
           open_library_key: string | null
           progress: number | null
+          summary: string | null
           status: Database["public"]["Enums"]["book_status"] | null
           title: string
+          toc: Json | null
           total_pages: number | null
           updated_at: string | null
           user_id: string
@@ -51,8 +53,10 @@ export type Database = {
           is_from_library?: boolean | null
           open_library_key?: string | null
           progress?: number | null
+          summary?: string | null
           status?: Database["public"]["Enums"]["book_status"] | null
           title: string
+          toc?: Json | null
           total_pages?: number | null
           updated_at?: string | null
           user_id: string
@@ -72,8 +76,10 @@ export type Database = {
           is_from_library?: boolean | null
           open_library_key?: string | null
           progress?: number | null
+          summary?: string | null
           status?: Database["public"]["Enums"]["book_status"] | null
           title?: string
+          toc?: Json | null
           total_pages?: number | null
           updated_at?: string | null
           user_id?: string

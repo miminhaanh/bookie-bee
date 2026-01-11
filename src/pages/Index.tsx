@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Plus, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import SplashScreen from "@/components/SplashScreen";
 import BottomNav from "@/components/BottomNav";
 import HomeHeader from "@/components/HomeHeader";
 import BookCard from "@/components/BookCard";
@@ -12,7 +11,6 @@ import { useProfile } from "@/hooks/useProfile";
 import { useBooks } from "@/hooks/useBooks";
 
 const Index = () => {
-  const [showSplash, setShowSplash] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
   const { user, loading: authLoading } = useAuth();
@@ -20,20 +18,12 @@ const Index = () => {
   const { books, isLoading: booksLoading, readingCount, completedCount } = useBooks();
   const navigate = useNavigate();
 
-  // Show splash for 2.5 seconds on first load
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
-
   // Redirect to auth if not logged in
   useEffect(() => {
-    if (!authLoading && !user && !showSplash) {
+    if (!authLoading && !user) {
       navigate("/auth", { replace: true });
     }
-  }, [user, authLoading, showSplash, navigate]);
+  }, [user, authLoading, navigate]);
 
   // Filter books by search
   const filteredBooks = books.filter((book) =>
@@ -41,20 +31,16 @@ const Index = () => {
     book.author?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  if (showSplash) {
-    return <SplashScreen />;
-  }
-
   if (authLoading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-soft-pink/30 via-cream to-peach/30">
+        <Loader2 className="h-8 w-8 animate-spin text-warm-pink" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20 pb-20">
       <HomeHeader 
         profile={profile} 
         readingCount={readingCount} 

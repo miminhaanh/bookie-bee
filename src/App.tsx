@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -14,11 +14,10 @@ import BookDetail from "./pages/BookDetail";
 import Reader from "./pages/Reader";
 import NotFound from "./pages/NotFound";
 import ProfileSettings from "./pages/settings/ProfileSettings";
-import SecuritySettings from "./pages/settings/SecuritySettings";
+import ReadingSettings from "./pages/settings/ReadingSettings";
+import PrivacySettings from "./pages/settings/PrivacySettings";
 import NotificationSettings from "./pages/settings/NotificationSettings";
-import AppearanceSettings from "./pages/settings/AppearanceSettings";
-import LanguageSettings from "./pages/settings/LanguageSettings";
-import LogoutSettings from "./pages/settings/LogoutSettings";
+import DataSettings from "./pages/settings/DataSettings";
 
 const queryClient = new QueryClient();
 
@@ -35,13 +34,11 @@ const App = () => (
             <Route path="/notes" element={<Notes />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/community" element={<Community />} />
-            <Route path="/settings" element={<Navigate to="/settings/profile" replace />} />
             <Route path="/settings/profile" element={<ProfileSettings />} />
-            <Route path="/settings/security" element={<SecuritySettings />} />
+            <Route path="/settings/reading" element={<ReadingSettings />} />
+            <Route path="/settings/privacy" element={<PrivacySettings />} />
             <Route path="/settings/notifications" element={<NotificationSettings />} />
-            <Route path="/settings/appearance" element={<AppearanceSettings />} />
-            <Route path="/settings/language" element={<LanguageSettings />} />
-            <Route path="/settings/logout" element={<LogoutSettings />} />
+            <Route path="/settings/data" element={<DataSettings />} />
             <Route path="/add-book" element={<AddBook />} />
             <Route path="/book/:id" element={<BookDetail />} />
             <Route path="/read/:id" element={<Reader />} />

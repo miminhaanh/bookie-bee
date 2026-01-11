@@ -1,316 +1,236 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, Loader2, Trash2, Calendar, Phone, User, FileText } from "lucide-react";
+import { ArrowLeft, Camera, Loader2, Check, Key, Link2, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import BottomNav from "@/components/BottomNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useAvatarUpload } from "@/hooks/useAvatarUpload";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const ProfileSettings = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { profile, updateProfile } = useProfile();
-  const { uploadAvatar, removeAvatar, isUploading } = useAvatarUpload();
+  const { uploadAvatar, isUploading } = useAvatarUpload();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [displayName, setDisplayName] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [gender, setGender] = useState("");
-  const [bio, setBio] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  // Load profile data when available
+  // Password dialog
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name || "");
-      setDateOfBirth(profile.date_of_birth || "");
-      setPhoneNumber(profile.phone_number || "");
-      setGender(profile.gender || "");
-      setBio(profile.bio || "");
     }
   }, [profile]);
 
-  if (!authLoading && !user) {
-    navigate("/auth", { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    const changed = displayName !== (profile?.display_name || "");
+    setHasChanges(changed);
+  }, [displayName, profile]);
 
-  const initials = (profile?.display_name || user?.email || "U")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = (profile?.display_name || user?.email || "U").slice(0, 2).toUpperCase();
 
-  const handleFileChange = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      await uploadAvatar(file);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await uploadAvatar(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleUpdateProfile = async () => {
+  const handleSave = async () => {
     setIsSubmitting(true);
     try {
       await updateProfile.mutateAsync({
         display_name: displayName.trim() || null,
-        date_of_birth: dateOfBirth || null,
-        phone_number: phoneNumber.trim() || null,
-        gender: gender || null,
-        bio: bio.trim() || null,
       });
-      toast({
-        title: "Cập nhật thành công!",
-        description: "Thông tin của bạn đã được lưu.",
-      });
+      toast({ title: "Đã lưu! 🐝" });
+      setHasChanges(false);
     } catch {
-      toast({
-        title: "Lỗi",
-        description: "Không thể cập nhật thông tin",
-        variant: "destructive",
-      });
+      toast({ title: "Lỗi", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Format phone number as user types
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^\d+\s-]/g, "");
-    setPhoneNumber(value);
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Mật khẩu không khớp", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: "Mật khẩu tối thiểu 6 ký tự", variant: "destructive" });
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      await supabase.auth.updateUser({ password: newPassword });
+      toast({ title: "Đã đổi mật khẩu! 🔐" });
+      setShowPasswordDialog(false);
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch {
+      toast({ title: "Lỗi", variant: "destructive" });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 safe-area-top">
+    <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20 pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="px-4 py-4">
-          <h1 className="text-xl font-bold text-foreground">
-            Thông tin cá nhân
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Quản lý hồ sơ của bạn
-          </p>
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/30">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-muted/50 rounded-lg">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-base font-bold">👤 Thông tin cá nhân</h1>
         </div>
       </header>
 
-      <main className="px-4 py-6 space-y-6">
-        {/* Avatar section */}
-        <div className="rounded-xl bg-card p-4 shadow-sm border border-border">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4">
-            Ảnh đại diện
-          </h3>
-
+      <main className="px-4 py-4 space-y-3">
+        {/* Avatar */}
+        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30">
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept="image/jpeg,image/png,image/gif,image/webp"
+            accept="image/*"
             className="hidden"
           />
-
           <div className="flex items-center gap-4">
             <div className="relative">
-              <Avatar className="h-20 w-20 border-2 border-primary/20">
+              <Avatar className="h-16 w-16 border-2 border-warm-pink/30">
                 <AvatarImage src={profile?.avatar_url || undefined} />
-                <AvatarFallback className="bg-primary/10 text-primary text-xl font-medium">
+                <AvatarFallback className="bg-soft-pink/50 text-warm-pink font-bold text-lg">
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="absolute -bottom-1 -right-1 rounded-full bg-primary p-2 text-primary-foreground shadow-md hover:bg-primary/90 transition-colors disabled:opacity-50"
-                    disabled={isUploading}
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Camera className="h-4 w-4" />
-                    )}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Camera className="mr-2 h-4 w-4" />
-                    Tải ảnh lên
-                  </DropdownMenuItem>
-                  {profile?.avatar_url && (
-                    <DropdownMenuItem
-                      onClick={removeAvatar}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Xóa avatar
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-warm-pink text-white flex items-center justify-center shadow-md"
+              >
+                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+              </button>
             </div>
-            <div>
-              <p className="font-medium text-foreground">
-                {profile?.display_name || "Chưa đặt tên"}
-              </p>
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+            <div className="flex-1">
+              <p className="font-semibold">{profile?.display_name || "Chưa đặt tên"}</p>
+              <p className="text-xs text-muted-foreground">Bấm vào ảnh để thay đổi</p>
             </div>
           </div>
         </div>
 
-        {/* Personal Information */}
-        <div className="rounded-xl bg-card p-4 shadow-sm border border-border">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4">
-            Thông tin cơ bản
-          </h3>
-
-          <div className="space-y-4">
-            {/* Display Name */}
-            <div className="space-y-2">
-              <Label htmlFor="displayName" className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                Tên hiển thị
-              </Label>
-              <Input
-                id="displayName"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Nhập tên của bạn"
-              />
-            </div>
-
-            {/* Date of Birth */}
-            <div className="space-y-2">
-              <Label htmlFor="dateOfBirth" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                Ngày sinh
-              </Label>
-              <Input
-                id="dateOfBirth"
-                type="date"
-                value={dateOfBirth}
-                onChange={(e) => setDateOfBirth(e.target.value)}
-                max={new Date().toISOString().split("T")[0]}
-              />
-            </div>
-
-            {/* Phone Number */}
-            <div className="space-y-2">
-              <Label htmlFor="phoneNumber" className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                Số điện thoại
-              </Label>
-              <Input
-                id="phoneNumber"
-                type="tel"
-                value={phoneNumber}
-                onChange={handlePhoneChange}
-                placeholder="+84 xxx xxx xxx"
-              />
-            </div>
-
-            {/* Gender */}
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                Giới tính
-              </Label>
-              <Select value={gender} onValueChange={setGender}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn giới tính" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="male">Nam</SelectItem>
-                  <SelectItem value="female">Nữ</SelectItem>
-                  <SelectItem value="other">Khác</SelectItem>
-                  <SelectItem value="prefer_not_to_say">Không muốn tiết lộ</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-
-        {/* Bio Section */}
-        <div className="rounded-xl bg-card p-4 shadow-sm border border-border">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4">
-            Giới thiệu bản thân
-          </h3>
-
-          <div className="space-y-2">
-            <Label htmlFor="bio" className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-muted-foreground" />
-              Tiểu sử
-            </Label>
-            <Textarea
-              id="bio"
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Viết vài dòng giới thiệu về bản thân..."
-              rows={4}
-              maxLength={500}
-              className="resize-none"
+        {/* Form Fields */}
+        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30 space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5" /> Tên hiển thị
+            </label>
+            <Input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Nhập tên của bạn"
+              className="h-10 rounded-xl bg-muted/30 border-0"
             />
-            <p className="text-xs text-muted-foreground text-right">
-              {bio.length}/500 ký tự
-            </p>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5" /> Email
+            </label>
+            <Input
+              value={user?.email || ""}
+              disabled
+              className="h-10 rounded-xl bg-muted/50 border-0 text-muted-foreground"
+            />
           </div>
         </div>
 
-        {/* Email (Read-only) */}
-        <div className="rounded-xl bg-card p-4 shadow-sm border border-border">
-          <h3 className="text-sm font-medium text-muted-foreground mb-4">
-            Thông tin tài khoản
-          </h3>
+        {/* Password & Social */}
+        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30 space-y-2">
+          <button
+            onClick={() => setShowPasswordDialog(true)}
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
+          >
+            <span className="text-sm flex items-center gap-2">
+              <Key className="w-4 h-4 text-warm-pink" /> Đổi mật khẩu
+            </span>
+            <span className="text-xs text-muted-foreground">••••••••</span>
+          </button>
 
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input value={user?.email || ""} disabled className="bg-muted" />
-            <p className="text-xs text-muted-foreground">
-              Email không thể thay đổi
-            </p>
-          </div>
+          <button className="w-full flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+            <span className="text-sm flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-warm-pink" /> Liên kết mạng xã hội
+            </span>
+            <span className="text-xs text-muted-foreground">Chưa liên kết</span>
+          </button>
         </div>
-
-        {/* Save Button */}
-        <Button
-          onClick={handleUpdateProfile}
-          disabled={isSubmitting}
-          className="w-full"
-          size="lg"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Đang lưu...
-            </>
-          ) : (
-            "Lưu thay đổi"
-          )}
-        </Button>
       </main>
+
+      {/* Save Button */}
+      {hasChanges && (
+        <div className="fixed bottom-20 left-4 right-4 z-40">
+          <Button
+            onClick={handleSave}
+            disabled={isSubmitting}
+            className="w-full h-11 rounded-2xl bg-gradient-to-r from-warm-pink to-coral shadow-lg font-semibold"
+          >
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+            Lưu thay đổi 🐝
+          </Button>
+        </div>
+      )}
+
+      {/* Password Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <DialogContent className="rounded-2xl max-w-sm mx-4">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-warm-pink" /> Đổi mật khẩu
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <Input
+              type="password"
+              placeholder="Mật khẩu mới"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="h-11 rounded-xl"
+            />
+            <Input
+              type="password"
+              placeholder="Xác nhận mật khẩu"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="h-11 rounded-xl"
+            />
+            <Button
+              onClick={handleChangePassword}
+              disabled={isChangingPassword}
+              className="w-full h-11 rounded-xl bg-gradient-to-r from-warm-pink to-coral"
+            >
+              {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : "Xác nhận"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <BottomNav />
     </div>

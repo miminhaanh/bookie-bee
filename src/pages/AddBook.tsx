@@ -22,6 +22,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBooks, type BookFormat } from "@/hooks/useBooks";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import pdfWorkerSrc from "pdfjs-dist/build/pdf.worker.min.js?url";
+
+GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 
 interface OpenLibraryBook {
   key: string;
@@ -61,7 +65,7 @@ const AddBook = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, loading: authLoading } = useAuth();
-  const { addBook } = useBooks();
+  const { addBook, updateBook } = useBooks();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -123,6 +127,7 @@ const AddBook = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // 1. Validate định dạng
     const format = getFileFormat(file.name);
     if (!format) {
       toast({
@@ -133,6 +138,7 @@ const AddBook = () => {
       return;
     }
 
+    // 2. Validate dung lượng
     if (file.size > 50 * 1024 * 1024) {
       toast({
         title: "File quá lớn",
@@ -160,6 +166,9 @@ const AddBook = () => {
       const cleanFileName = sanitizeFileName(uploadedFile.name);
       const filePath = `${user.id}/${Date.now()}-${cleanFileName}`;
 
+      console.log("Đang upload lên path:", filePath);
+
+      // 4. Upload lên Storage
       const { error: uploadError } = await supabase.storage
         .from("book-files")
         .upload(filePath, uploadedFile, {
@@ -168,7 +177,10 @@ const AddBook = () => {
           contentType: uploadedFile.type
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Lỗi Storage:", uploadError);
+        throw new Error(`Lỗi Storage: ${uploadError.message}`);
+      }
 
       // Add book to database
       await addBook.mutateAsync({
@@ -181,23 +193,65 @@ const AddBook = () => {
         file_url: filePath,
         status: "to_read",
         progress: 0,
-        current_position: null,
-        total_pages: null,
+        current_position: "",
+        total_pages: 0,
         current_page: 0,
-        estimated_time_remaining: null,
+        toc: extractedToc,
+        estimated_time_remaining: 0,
         is_from_library: false,
         open_library_key: null,
       });
+
+      // 7. Nếu là PDF: tạo ảnh bìa từ trang 1 và cập nhật cover_url cho cuốn vừa tạo
+      if (format === "pdf") {
+        try {
+          const cover = await renderPdfFirstPageToCoverBlob(file);
+          const baseName = cleanFileName.replace(/\.pdf$/i, "");
+          const coverPath = `${user.id}/${Date.now()}_${baseName}.${cover.extension}`;
+
+          const { error: coverUploadError } = await supabase.storage
+            .from(COVERS_BUCKET)
+            .upload(coverPath, cover.blob, {
+              cacheControl: "3600",
+              upsert: false,
+              contentType: cover.contentType,
+            });
+
+          if (coverUploadError) throw new Error(coverUploadError.message);
+
+          const { data: coverPub } = supabase.storage
+            .from(COVERS_BUCKET)
+            .getPublicUrl(coverPath);
+
+          const coverUrl = coverPub.publicUrl;
+
+          await updateBook.mutateAsync({
+            id: createdBook.id,
+            cover_url: coverUrl,
+          });
+        } catch (err: any) {
+          console.warn("Không thể tạo/cập nhật ảnh bìa tự động từ PDF:", err);
+          toast({
+            title: "Không thể tạo ảnh bìa",
+            description:
+              "Sách đã được thêm, nhưng chưa có ảnh bìa tự động. Hãy kiểm tra bucket book-covers (hoặc VITE_SUPABASE_COVERS_BUCKET) và Allowed MIME types image/*.",
+          });
+        }
+      }
 
       toast({
         title: "Thêm sách thành công! 🐝",
         description: `"${formData.title}" đã được thêm vào thư viện`,
       });
       navigate("/");
-    } catch (error) {
+
+    } catch (error: any) {
+      console.error("Lỗi chi tiết:", error);
+      
+      // QUAN TRỌNG: Hiển thị lỗi thật sự ra màn hình
       toast({
-        title: "Lỗi",
-        description: "Không thể tải lên sách",
+        title: "Thất bại",
+        description: error.message || "Có lỗi không xác định xảy ra",
         variant: "destructive",
       });
     } finally {

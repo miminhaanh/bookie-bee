@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useBooks } from "@/hooks/useBooks";
+import { useBooks, type TocItem } from "@/hooks/useBooks";
 import { useHighlights } from "@/hooks/useHighlights";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -32,13 +32,53 @@ const colorMap = {
   red: "bg-highlight-red",
 };
 
+const TocNode = ({ 
+  items, 
+  onNavigate 
+}: { 
+  items: TocItem[], 
+  onNavigate: (page: number) => void 
+}) => {
+  return (
+    <div className="flex flex-col gap-1">
+      {items.map((item, idx) => (
+        <div key={idx} className="flex flex-col">
+          {/* Dòng hiển thị tiêu đề */}
+          <button
+            onClick={() => item.page && onNavigate(item.page)}
+            className={cn(
+              "flex w-full items-center justify-between py-2 text-sm text-foreground transition-colors hover:text-primary text-left",
+              !item.page && "cursor-default font-semibold text-muted-foreground hover:text-muted-foreground"
+            )}
+            disabled={!item.page}
+          >
+            <span className="line-clamp-1 mr-2">{item.title}</span>
+            {item.page && (
+              <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                Trang {item.page}
+              </span>
+            )}
+          </button>
+
+          {/* Nếu có mục con thì hiển thị thụt vào (Đệ quy) */}
+          {item.items && item.items.length > 0 && (
+            <div className="ml-4 border-l border-border pl-2">
+              <TocNode items={item.items} onNavigate={onNavigate} />
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const BookDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
   const { user, loading: authLoading } = useAuth();
   const { books, deleteBook, updateBook, isLoading } = useBooks();
-  const { highlights } = useHighlights(id);
+  const { highlights, deleteHighlight } = useHighlights(id);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -217,8 +257,18 @@ const BookDetail = () => {
                 {highlights.slice(0, 5).map((h) => (
                   <div
                     key={h.id}
-                    className={cn("rounded-lg p-3", colorMap[h.color])}
+                    className={cn("relative rounded-lg p-3", colorMap[h.color])}
                   >
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1 h-8 w-8"
+                      onClick={() => deleteHighlight.mutate(h.id)}
+                      aria-label="Xóa highlight"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                     <p className="text-sm text-foreground">"{h.content}"</p>
                     {h.note && (
                       <p className="mt-1 text-xs text-muted-foreground italic">
@@ -231,7 +281,7 @@ const BookDetail = () => {
                   <Button 
                     variant="outline" 
                     className="w-full"
-                    onClick={() => navigate("/notes")}
+                    onClick={() => navigate(`/notes?bookId=${book.id}`)}
                   >
                     Xem tất cả ({highlights.length})
                   </Button>
@@ -274,5 +324,7 @@ const BookDetail = () => {
     </div>
   );
 };
+
+
 
 export default BookDetail;

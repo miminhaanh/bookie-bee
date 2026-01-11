@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { icon: BookOpen, path: "/", label: "Thư viện" },
   { icon: PenLine, path: "/notes", label: "Ghi chú" },
-  { icon: BarChart3, path: "/reports", label: "Báo cáo" },
+  { icon: BarChart3, path: "/dashboard", label: "Báo cáo" },
   { icon: Globe, path: "/community", label: "Cộng đồng" },
   { icon: Settings, path: "/settings", label: "Cài đặt" },
 ];

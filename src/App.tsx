@@ -7,7 +7,6 @@ import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Notes from "./pages/Notes";
-import Reports from "./pages/Reports";
 import Community from "./pages/Community";
 import AddBook from "./pages/AddBook";
 import BookDetail from "./pages/BookDetail";
@@ -18,6 +17,8 @@ import ReadingSettings from "./pages/settings/ReadingSettings";
 import PrivacySettings from "./pages/settings/PrivacySettings";
 import NotificationSettings from "./pages/settings/NotificationSettings";
 import DataSettings from "./pages/settings/DataSettings";
+import Dashboard from "./pages/Report";
+
 
 const queryClient = new QueryClient();
 
@@ -30,9 +31,10 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/notes" element={<Notes />} />
-            <Route path="/reports" element={<Reports />} />
+            <Route path="/reports" element={<Dashboard />} />
             <Route path="/community" element={<Community />} />
             <Route path="/settings/profile" element={<ProfileSettings />} />
             <Route path="/settings/reading" element={<ReadingSettings />} />

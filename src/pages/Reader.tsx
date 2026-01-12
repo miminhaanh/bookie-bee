@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Bookmark,
+  List,
   Settings,
   Loader2,
   ChevronLeft,
@@ -18,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { useBooks } from "@/hooks/useBooks";
 import { useAuth } from "@/hooks/useAuth";
 import { useReadingSession } from "@/hooks/useReadingSession";
+import { useSaveReadingProgress } from "@/hooks/useSaveReadingProgress";
 import { useHighlights, type Highlight as DbHighlight } from "@/hooks/useHighlights";
 import { cn } from "@/lib/utils";
 import ePub from "epubjs";
@@ -39,11 +41,19 @@ import {
 } from "@react-pdf-viewer/highlight";
 import "@react-pdf-viewer/highlight/lib/styles/index.css";
 import { scrollModePlugin } from "@react-pdf-viewer/scroll-mode";
+import { bookmarkPlugin } from "@react-pdf-viewer/bookmark";
+import "@react-pdf-viewer/bookmark/lib/styles/index.css";
 import { pageNavigationPlugin } from "@react-pdf-viewer/page-navigation";
 import "@react-pdf-viewer/page-navigation/lib/styles/index.css";
 import { zoomPlugin } from "@react-pdf-viewer/zoom";
 import "@react-pdf-viewer/zoom/lib/styles/index.css";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.js?url";
+
+type EpubTocItem = {
+  label: string;
+  href?: string;
+  subitems?: EpubTocItem[];
+};
 
 const getHighlightAreasFromDb = (h: DbHighlight): HighlightArea[] => {
   if (!h.position) return [];
@@ -93,6 +103,9 @@ const Reader = () => {
   const [deletingHighlightId, setDeletingHighlightId] = useState<string | null>(null);
   const [pageHighlights, setPageHighlights] = useState<DbHighlight[]>([]);
   const [isHighlightsOpen, setIsHighlightsOpen] = useState(false);
+  const [isTocOpen, setIsTocOpen] = useState(false);
+  const [epubToc, setEpubToc] = useState<EpubTocItem[]>([]);
+  const [isEpubTocLoading, setIsEpubTocLoading] = useState(false);
   const [highlightsList, setHighlightsList] = useState<DbHighlight[]>([]);
   const [isHighlightsLoading, setIsHighlightsLoading] = useState(false);
   const epubRef = useRef<HTMLDivElement | null>(null);
@@ -111,7 +124,7 @@ const Reader = () => {
   const { endSession } = useReadingSession(id || "");
 
   const book = books.find((b) => b.id === id);
-  const totalPages = book?.total_pages || 100;
+  const totalPages = typeof book?.total_pages === "number" && book.total_pages > 0 ? book.total_pages : null;
   const fileUrl = book?.file_url || "";
 
   useEffect(() => {
@@ -141,14 +154,7 @@ const Reader = () => {
     setShowUI((prev) => !prev);
   }, []);
 
-  // Update progress when page changes
-  useEffect(() => {
-    if (!book || !id) return;
-    const denom = isPdf && numPages ? numPages : totalPages;
-    const progress = denom ? (currentPage / denom) * 100 : 0;
-
-    updateBook.mutate({ id, progress, current_page: currentPage });
-  }, [currentPage, totalPages, isPdf, numPages]);
+  const didJumpToInitialPageRef = useRef(false);
 
   // Cleanup session on unmount
   useEffect(() => {
@@ -347,10 +353,13 @@ const Reader = () => {
   // Call them at the top level (not inside useMemo/useEffect).
   const highlightPluginInstance = highlightPlugin({ renderHighlightTarget, renderHighlights });
   const scrollModePluginInstance = scrollModePlugin();
+  const bookmarkPluginInstance = bookmarkPlugin();
   const pageNavigationPluginInstance = pageNavigationPlugin();
   const zoomPluginInstance = zoomPlugin();
 
   const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
+  const { CurrentPageInput, NumberOfPages } = pageNavigationPluginInstance;
+  const { Bookmarks } = bookmarkPluginInstance;
 
   const didJumpToQueryPageRef = useRef(false);
   const queryPageRef = useRef<number | null>(null);
@@ -360,29 +369,74 @@ const Reader = () => {
     const parsed = raw ? Number.parseInt(raw, 10) : NaN;
     queryPageRef.current = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     didJumpToQueryPageRef.current = false;
+    didJumpToInitialPageRef.current = false;
   }, [location.search]);
+
+  const denomForProgress = isPdf && numPages ? numPages : totalPages;
+  const { hydratedPage } = useSaveReadingProgress({
+    bookId: id,
+    enabled: !!user?.id && !!id,
+    currentPage,
+    denom: denomForProgress,
+    debounceMs: 1200,
+    updateBook,
+    onHydratePage: (page) => {
+      // If the URL explicitly requests a page, let it win.
+      if (queryPageRef.current) return;
+      setCurrentPage(page);
+    },
+  });
 
   const handlePdfDocumentLoad = useCallback(
     (e: DocumentLoadEvent) => {
       setNumPages(e.doc.numPages);
 
-      const requestedPage = queryPageRef.current;
-      if (!requestedPage || didJumpToQueryPageRef.current) return;
+      // Persist total pages for PDFs if we don't have it yet.
+      if (book && (!book.total_pages || book.total_pages <= 0) && e.doc.numPages > 0) {
+        updateBook.mutate({ id: book.id, total_pages: e.doc.numPages });
+      }
 
-      const clamped = Math.min(Math.max(requestedPage, 1), e.doc.numPages);
+      const requestedPage = queryPageRef.current;
+      const target = requestedPage ?? hydratedPage;
+
+      if (!target) return;
+      if (requestedPage && didJumpToQueryPageRef.current) return;
+      if (!requestedPage && didJumpToInitialPageRef.current) return;
+
+      const clamped = Math.min(Math.max(target, 1), e.doc.numPages);
       try {
         // jumpToPage uses zero-based index
         pageNavigationPluginInstance.jumpToPage(clamped - 1);
         setCurrentPage(clamped);
         setHasVisitedPage(true);
-        didJumpToQueryPageRef.current = true;
+        if (requestedPage) didJumpToQueryPageRef.current = true;
+        else didJumpToInitialPageRef.current = true;
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn("Failed to jump to TOC page:", err);
+        console.warn("Failed to jump to initial page:", err);
       }
     },
-    [pageNavigationPluginInstance],
+    [pageNavigationPluginInstance, book, updateBook, hydratedPage],
   );
+
+  // If DB hydration completes after the PDF has loaded, jump once.
+  useEffect(() => {
+    if (!isPdf || !numPages) return;
+    if (queryPageRef.current) return;
+    const target = hydratedPage;
+    if (!target || didJumpToInitialPageRef.current) return;
+
+    const clamped = Math.min(Math.max(target, 1), numPages);
+    try {
+      pageNavigationPluginInstance.jumpToPage(clamped - 1);
+      setCurrentPage(clamped);
+      setHasVisitedPage(true);
+      didJumpToInitialPageRef.current = true;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn("Failed to jump after hydration:", err);
+    }
+  }, [hydratedPage, isPdf, numPages, pageNavigationPluginInstance]);
 
   const handlePdfPageChange = useCallback(
     (e: PageChangeEvent) => {
@@ -431,6 +485,64 @@ const Reader = () => {
       }
     };
   }, [isEpub, fileUrl]);
+
+  // Load EPUB table of contents on demand
+  useEffect(() => {
+    if (!isTocOpen) return;
+    if (!isEpub) return;
+    if (epubToc.length > 0) return;
+    if (!bookRef.current) return;
+
+    let cancelled = false;
+    setIsEpubTocLoading(true);
+
+    const run = async () => {
+      try {
+        const bookObj = bookRef.current as unknown as {
+          loaded?: { navigation?: Promise<unknown> };
+          navigation?: { toc?: unknown[] };
+        };
+
+        // epubjs exposes navigation either via loaded.navigation or book.navigation
+        if (bookObj.loaded?.navigation) {
+          await bookObj.loaded.navigation;
+        }
+
+        const rawToc = (bookObj.navigation as { toc?: unknown[] } | undefined)?.toc;
+        const normalize = (items: unknown[]): EpubTocItem[] => {
+          return items
+            .map((it) => {
+              const x = it as { label?: string; href?: string; subitems?: unknown[]; subitems2?: unknown[] };
+              const children = Array.isArray(x.subitems)
+                ? x.subitems
+                : Array.isArray(x.subitems2)
+                  ? x.subitems2
+                  : [];
+              return {
+                label: String(x.label ?? ""),
+                href: x.href,
+                subitems: children.length ? normalize(children) : [],
+              } satisfies EpubTocItem;
+            })
+            .filter((x) => x.label.trim().length > 0);
+        };
+
+        const toc = Array.isArray(rawToc) ? normalize(rawToc) : [];
+        if (!cancelled) setEpubToc(toc);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to load EPUB TOC:", err);
+        if (!cancelled) setEpubToc([]);
+      } finally {
+        if (!cancelled) setIsEpubTocLoading(false);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [epubToc.length, isEpub, isTocOpen]);
 
   // Try to prefetch PDF into a blob URL to avoid CORS/authorization issues when loading in <Document />
   useEffect(() => {
@@ -508,7 +620,13 @@ const Reader = () => {
                   onPageChange={handlePdfPageChange}
                   scrollMode={scrollMode}
                   defaultScale={SpecialZoomLevel.PageFit}
-                  plugins={[highlightPluginInstance, zoomPluginInstance, scrollModePluginInstance, pageNavigationPluginInstance]}
+                  plugins={[
+                    highlightPluginInstance,
+                    zoomPluginInstance,
+                    scrollModePluginInstance,
+                    bookmarkPluginInstance,
+                    pageNavigationPluginInstance,
+                  ]}
                 />
               </div>
             </Worker>
@@ -555,10 +673,80 @@ const Reader = () => {
           </Button>
           
           <h1 className="text-sm font-medium truncate max-w-[200px]">
-            {book.title}
+            {book?.title ?? "Đang đọc"}
           </h1>
 
           <div className="flex items-center gap-2">
+            <Sheet open={isTocOpen} onOpenChange={setIsTocOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Xem mục lục"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <SheetHeader>
+                  <SheetTitle>Mục lục</SheetTitle>
+                </SheetHeader>
+
+                <div className="mt-6 flex-1 overflow-y-auto pr-1">
+                  {isPdf ? (
+                    <div className="text-sm">
+                      <Bookmarks />
+                    </div>
+                  ) : isEpub ? (
+                    isEpubTocLoading ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    ) : epubToc.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Sách này chưa có mục lục.</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {(() => {
+                          const renderItems = (items: EpubTocItem[], depth = 0) => {
+                            return items.map((item, idx) => (
+                              <div key={`${depth}-${idx}-${item.href ?? item.label}`}>
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    "w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
+                                    depth > 0 ? "pl-" + String(Math.min(2 + depth * 2, 10)) : "",
+                                  )}
+                                  style={{ paddingLeft: depth ? `${8 + depth * 12}px` : undefined }}
+                                  onClick={() => {
+                                    const href = item.href;
+                                    if (!href) return;
+                                    const rendition = renditionRef.current as unknown as { display?: (target: string) => unknown };
+                                    if (typeof rendition?.display === "function") {
+                                      void rendition.display(href);
+                                      setIsTocOpen(false);
+                                    }
+                                  }}
+                                >
+                                  {item.label}
+                                </button>
+                                {item.subitems && item.subitems.length ? (
+                                  <div className="mt-1">{renderItems(item.subitems, depth + 1)}</div>
+                                ) : null}
+                              </div>
+                            ));
+                          };
+                          return renderItems(epubToc);
+                        })()}
+                      </div>
+                    )
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Mục lục chưa hỗ trợ cho định dạng này.</p>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
             <Sheet open={isHighlightsOpen} onOpenChange={setIsHighlightsOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -806,7 +994,23 @@ const Reader = () => {
         <div className="px-2 py-1.5">
           {/* Progress */}
           <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>Trang {currentPage}/{isPdf && numPages ? numPages : totalPages}</span>
+            <span className="flex items-center gap-1">
+              Trang
+              {isPdf ? (
+                <span
+                  className="inline-flex items-center gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <CurrentPageInput />
+                  <span>/</span>
+                  <NumberOfPages />
+                </span>
+              ) : (
+                <span>
+                  {currentPage}/{totalPages}
+                </span>
+              )}
+            </span>
             <span>{Math.round((currentPage / (isPdf && numPages ? numPages : totalPages)) * 100)}%</span>
           </div>
           
@@ -907,6 +1111,15 @@ const Reader = () => {
                         </Button>
                       )}
                     </ZoomOut>
+
+                    <div
+                      className="flex h-9 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
+                      aria-label="Nhảy đến trang"
+                    >
+                      <CurrentPageInput />
+                      <span className="mx-1 text-muted-foreground">/</span>
+                      <NumberOfPages />
+                    </div>
 
                     <CurrentScale>
                       {(props) => (

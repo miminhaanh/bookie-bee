@@ -63,19 +63,21 @@ export const useReadingSession = (bookId: string) => {
         // Update or insert daily reading
         const today = format(new Date(), "yyyy-MM-dd");
         
-        const { data: existingDaily } = await supabase
+        const { data: existingDaily, error: dailyError } = await supabase
           .from("daily_reading")
           .select("*")
           .eq("user_id", user.id)
           .eq("date", today)
-          .single();
+          .maybeSingle();
+
+        if (dailyError) throw dailyError;
 
         if (existingDaily) {
           await supabase
             .from("daily_reading")
             .update({
-              total_seconds: existingDaily.total_seconds + durationSeconds,
-              books_count: existingDaily.books_count + 1,
+              total_seconds: (existingDaily.total_seconds ?? 0) + durationSeconds,
+              books_count: (existingDaily.books_count ?? 0) + 1,
             })
             .eq("id", existingDaily.id);
         } else {

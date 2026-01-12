@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 const radiusMap = {
-  sm: "rounded-md",
-  md: "rounded-lg",
-  lg: "rounded-xl",
+  sm: "rounded-none",
+  md: "rounded",
+  lg: "rounded-lg",
 };
 
 const sizeMap = {
@@ -66,7 +66,6 @@ export const ModernBookCover = ({
   const currentSize = sizeMap[size];
 
   return (
-    // 👇 Đã xoá các biến CSS shadowColor không còn dùng
     <div
       className={`group relative z-10 [perspective:800px] transition-all ${className}`}
       style={{ width: currentSize.width, height: currentSize.height }}

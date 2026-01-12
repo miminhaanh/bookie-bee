@@ -10,6 +10,7 @@ import {
   List,
   Loader2,
   MoreVertical,
+  Pencil,
   Play,
   Share2,
   Sparkles,
@@ -19,13 +20,31 @@ import {
 } from "lucide-react";
 import { BookDescription, BookTitle, ModernBookCover } from "@/components/books/ModernBookCover";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,21 +63,70 @@ import { cn } from "@/lib/utils";
 
 type TocRow = { chapter: number; title: string; page: number };
 
-const demoToc: TocRow[] = [
-  { chapter: 1, title: "Mở đầu - Giấc mơ lặp lại", page: 1 },
-  { chapter: 2, title: "Người phụ nữ Gypsy", page: 15 },
-  { chapter: 3, title: "Gặp gỡ nhà vua", page: 35 },
-  { chapter: 4, title: "Hành trình qua sa mạc", page: 65 },
-  { chapter: 5, title: "Oasis và tình yêu", page: 98 },
-  { chapter: 6, title: "Nhà Giả Kim", page: 130 },
-  { chapter: 7, title: "Kho báu thực sự", page: 195 },
+type TocRowV2 = { label: string; title: string; page: number; depth: number };
+
+const demoToc: TocRowV2[] = [
+  { label: "I", title: "Mở đầu - Giấc mơ lặp lại", page: 1, depth: 0 },
+  { label: "II", title: "Người phụ nữ Gypsy", page: 15, depth: 0 },
+  { label: "III", title: "Gặp gỡ nhà vua", page: 35, depth: 0 },
+  { label: "IV", title: "Hành trình qua sa mạc", page: 65, depth: 0 },
+  { label: "V", title: "Oasis và tình yêu", page: 98, depth: 0 },
+  { label: "VI", title: "Nhà Giả Kim", page: 130, depth: 0 },
+  { label: "VII", title: "Kho báu thực sự", page: 195, depth: 0 },
 ];
+
+const toRoman = (num: number) => {
+  if (!Number.isFinite(num) || num <= 0) return "";
+  const romans: Array<{ value: number; symbol: string }> = [
+    { value: 1000, symbol: "M" },
+    { value: 900, symbol: "CM" },
+    { value: 500, symbol: "D" },
+    { value: 400, symbol: "CD" },
+    { value: 100, symbol: "C" },
+    { value: 90, symbol: "XC" },
+    { value: 50, symbol: "L" },
+    { value: 40, symbol: "XL" },
+    { value: 10, symbol: "X" },
+    { value: 9, symbol: "IX" },
+    { value: 5, symbol: "V" },
+    { value: 4, symbol: "IV" },
+    { value: 1, symbol: "I" },
+  ];
+
+  let n = Math.floor(num);
+  let out = "";
+  for (const r of romans) {
+    while (n >= r.value) {
+      out += r.symbol;
+      n -= r.value;
+    }
+  }
+  return out;
+};
 
 const highlightBgByColor: Record<string, string> = {
   yellow: "bg-highlight-yellow/30 border-highlight-yellow/40",
   blue: "bg-highlight-blue/30 border-highlight-blue/40",
   red: "bg-highlight-red/30 border-highlight-red/40",
 };
+
+const GENRES = [
+  "Văn học",
+  "Self-help",
+  "Kinh doanh",
+  "Khoa học",
+  "Lịch sử",
+  "Tâm lý",
+  "Truyện ngắn",
+  "Tiểu thuyết",
+] as const;
+
+type BookPrivacy = "private" | "link" | "public";
+const PRIVACY_OPTIONS: Array<{ value: BookPrivacy; label: string; desc: string }> = [
+  { value: "private", label: "Riêng tư", desc: "Chỉ mình bạn xem được" },
+  { value: "link", label: "Chia sẻ link", desc: "Ai có link đều xem được" },
+  { value: "public", label: "Công khai", desc: "Hiển thị trong cộng đồng" },
+];
 
 const formatViDate = (iso?: string | null) => {
   if (!iso) return "-";
@@ -82,20 +150,38 @@ const normalizeTocItems = (raw: unknown): TocItem[] => {
     .filter((v): v is TocItem => !!v);
 };
 
-const flattenToc = (items: TocItem[]): TocRow[] => {
-  const rows: TocRow[] = [];
-  const walk = (nodes: TocItem[]) => {
+const flattenToc = (items: TocItem[]): TocRowV2[] => {
+  const rows: TocRowV2[] = [];
+
+  const walk = (
+    nodes: TocItem[],
+    depth: number,
+    prefix: string | null,
+  ) => {
+    let localIndex = 0;
     for (const n of nodes) {
+      localIndex += 1;
+      const label =
+        depth === 0
+          ? toRoman(localIndex)
+          : prefix
+            ? `${prefix}.${localIndex}`
+            : `${localIndex}`;
+
       if (typeof n.page === "number") {
-        rows.push({ chapter: rows.length + 1, title: n.title, page: n.page });
+        rows.push({ label, title: n.title, page: n.page, depth });
       }
+
       if (Array.isArray(n.items) && n.items.length > 0) {
-        walk(n.items);
+        // For nested items, number as 1,2,... within each parent section
+        // (Roman numeral section stays at depth 0)
+        const nextPrefix = depth === 0 ? null : label;
+        walk(n.items, depth + 1, nextPrefix);
       }
     }
   };
 
-  walk(items);
+  walk(items, 0, null);
   return rows;
 };
 
@@ -109,6 +195,12 @@ const BookDetail = () => {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editAuthor, setEditAuthor] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editGenre, setEditGenre] = useState<string>("none");
+  const [editPrivacy, setEditPrivacy] = useState<BookPrivacy>("private");
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -140,16 +232,25 @@ const BookDetail = () => {
   const coverUrl = book?.cover_url ?? demoBook.cover_url;
   const description = book?.description ?? demoBook.description;
   const category = book?.genre ?? demoBook.category;
-  const totalPages = book?.total_pages ?? demoBook.total_pages;
+  const rawTotalPages = typeof book?.total_pages === "number" ? book.total_pages : null;
+  const totalPages = rawTotalPages && rawTotalPages > 0 ? rawTotalPages : null;
   const currentPage = typeof book?.current_page === "number" ? book.current_page : 0;
   const progressPct = typeof book?.progress === "number" ? Math.max(0, Math.min(100, book.progress)) : 0;
 
   const startedAt = book?.created_at ?? demoBook.created_at;
   const lastReadAt = book?.updated_at ?? demoBook.updated_at;
 
-  const estimatedMinutes = typeof book?.estimated_time_remaining === "number"
-    ? Math.round(book.estimated_time_remaining / 60)
-    : null;
+  // Estimate remaining reading time: 1.5 minutes per remaining page, converted to hours.
+  const remainingPages = typeof totalPages === "number" ? Math.max(0, totalPages - currentPage) : null;
+  const estimatedMinutes = typeof remainingPages === "number" ? Math.round(remainingPages * 1.5) : null;
+  const estimatedHoursRaw = typeof estimatedMinutes === "number" ? estimatedMinutes / 60 : null;
+  const estimatedHoursDisplay =
+    typeof estimatedHoursRaw === "number"
+      ? Math.max(
+          0.1,
+          estimatedHoursRaw >= 10 ? Math.round(estimatedHoursRaw) : Math.round(estimatedHoursRaw * 10) / 10,
+        )
+      : null;
 
   const tags = useMemo(() => {
     const fromBook = book?.genre ? [book.genre] : [];
@@ -161,6 +262,59 @@ const BookDetail = () => {
     const flattened = flattenToc(normalized);
     return flattened.length > 0 ? flattened : demoToc;
   }, [book?.toc]);
+
+  const openEditDialog = () => {
+    if (!book) return;
+
+    setEditTitle(book.title ?? "");
+    setEditAuthor(book.author ?? "");
+    setEditDescription(book.description ?? "");
+    setEditGenre(book.genre ? book.genre : "none");
+
+    const privacyKey = `book_privacy_${book.id}`;
+    const savedPrivacy = (localStorage.getItem(privacyKey) as BookPrivacy | null) ?? null;
+    setEditPrivacy(savedPrivacy && ["private", "link", "public"].includes(savedPrivacy) ? savedPrivacy : "private");
+
+    setIsEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!book) return;
+
+    const nextTitle = editTitle.trim();
+    if (!nextTitle) {
+      toast({
+        title: "Thiếu thông tin",
+        description: "Vui lòng nhập Tên sách.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await updateBook.mutateAsync({
+        id: book.id,
+        title: nextTitle,
+        author: editAuthor.trim() ? editAuthor.trim() : null,
+        description: editDescription.trim() ? editDescription.trim() : null,
+        genre: editGenre !== "none" && editGenre.trim() ? editGenre.trim() : null,
+      });
+
+      localStorage.setItem(`book_privacy_${book.id}`, editPrivacy);
+
+      toast({
+        title: "Đã cập nhật",
+        description: "Thông tin sách đã được lưu.",
+      });
+      setIsEditOpen(false);
+    } catch {
+      toast({
+        title: "Lỗi",
+        description: "Không thể cập nhật sách.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleDelete = async () => {
     if (!book) return;
@@ -226,6 +380,13 @@ const BookDetail = () => {
     }
   };
 
+  const coverColor = useMemo(() => {
+    const source = book?.id ?? demoBook.id;
+    const hash = Array.from(source).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    const colors = ["zinc", "slate", "indigo", "violet", "emerald", "rose"] as const;
+    return colors[hash % colors.length];
+  }, [book?.id, demoBook.id]);
+
   if (authLoading || booksLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -236,13 +397,6 @@ const BookDetail = () => {
 
   // If we can't find the book in the user's library, still show the sample layout.
   const canRead = !!book && (!!book.file_url || !!book.is_from_library);
-
-  const coverColor = useMemo(() => {
-    const source = book?.id ?? demoBook.id;
-    const hash = Array.from(source).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-    const colors = ["zinc", "slate", "indigo", "violet", "emerald", "rose"] as const;
-    return colors[hash % colors.length];
-  }, [book?.id, demoBook.id]);
 
   return (
     <div className="min-h-screen overflow-hidden bg-background">
@@ -335,12 +489,12 @@ const BookDetail = () => {
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border/60 bg-card/60 backdrop-blur">
                 <BookOpen className="w-5 h-5 text-primary" />
-                <span className="font-medium">{totalPages} trang</span>
+                <span className="font-medium">{typeof totalPages === "number" ? `${totalPages} trang` : "- trang"}</span>
               </div>
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border/60 bg-card/60 backdrop-blur">
                 <Clock className="w-5 h-5 text-secondary" />
                 <span className="font-medium">
-                  {estimatedMinutes ? `~${Math.max(1, Math.round(estimatedMinutes / 60))} giờ đọc` : "~4 giờ đọc"}
+                  {typeof estimatedHoursDisplay === "number" ? `~${estimatedHoursDisplay} giờ đọc` : "~4 giờ đọc"}
                 </span>
               </div>
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border/60 bg-card/60 backdrop-blur">
@@ -365,9 +519,11 @@ const BookDetail = () => {
 
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>
-                  Trang {currentPage} / {totalPages}
+                  Trang {currentPage} / {typeof totalPages === "number" ? totalPages : "-"}
                 </span>
-                <span>Còn {Math.max(0, totalPages - currentPage)} trang</span>
+                <span>
+                  Còn {typeof totalPages === "number" ? Math.max(0, totalPages - currentPage) : "-"} trang
+                </span>
               </div>
             </div>
 
@@ -398,6 +554,16 @@ const BookDetail = () => {
               <Button variant="outline" size="lg" className="gap-2 rounded-xl" onClick={handleShare}>
                 <Share2 className="w-5 h-5" />
                 Chia sẻ
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="gap-2 rounded-xl"
+                onClick={openEditDialog}
+                disabled={!book}
+              >
+                <Pencil className="w-5 h-5" />
+                Chỉnh sửa
               </Button>
             </div>
 
@@ -449,27 +615,37 @@ const BookDetail = () => {
 
                 return (
                   <div
-                    key={`${item.chapter}-${item.page}`}
+                    key={`${item.label}-${item.page}`}
                     className={cn(
                       "flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all",
+                      item.depth > 0 && "pl-10",
                       isCurrentChapter
                         ? "bg-gradient-to-r from-primary/15 to-accent/10 border border-primary/25"
-                        : "hover:bg-muted/50"
+                        : item.depth === 0
+                          ? "bg-warm-pink/10 border border-warm-pink/20 hover:bg-warm-pink/15"
+                          : "hover:bg-muted/50"
                     )}
                     onClick={() => navigate(`/read/${book?.id || demoBook.id}?page=${item.page}`)}
                   >
                     <div className="flex items-center gap-3">
                       <span
                         className={cn(
-                          "w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold",
+                          "rounded-lg flex items-center justify-center font-bold",
+                          item.depth === 0 ? "w-8 h-8 text-sm tracking-wide" : "w-7 h-7 text-xs",
                           isCurrentChapter
                             ? "bg-gradient-to-br from-primary to-accent text-primary-foreground"
                             : "bg-muted text-muted-foreground"
                         )}
                       >
-                        {item.chapter}
+                        {item.label}
                       </span>
-                      <span className={cn("font-medium", isCurrentChapter ? "text-foreground" : "text-muted-foreground")}>
+                      <span
+                        className={cn(
+                          "font-medium",
+                          item.depth > 0 && "pl-1",
+                          isCurrentChapter ? "text-foreground" : "text-muted-foreground",
+                        )}
+                      >
                         {item.title}
                       </span>
                     </div>
@@ -577,7 +753,7 @@ const BookDetail = () => {
             <div className="p-4 rounded-xl bg-gradient-to-br from-lavender/30 to-transparent border border-lavender/20">
               <p className="text-sm text-muted-foreground mb-1">Ước tính còn lại</p>
               <p className="font-bold text-foreground">
-                {estimatedMinutes ? `${estimatedMinutes} phút` : "-"}
+                {typeof estimatedHoursDisplay === "number" ? `~${estimatedHoursDisplay} giờ` : "-"}
               </p>
             </div>
           </div>
@@ -601,6 +777,108 @@ const BookDetail = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit book dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa sách</DialogTitle>
+            <DialogDescription>Cập nhật thông tin sách của bạn.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-title" className="text-foreground font-semibold">
+                Tên sách *
+              </Label>
+              <Input
+                id="edit-title"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Nhập tên sách..."
+                className="rounded-xl"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-author" className="text-foreground font-semibold">
+                  Tác giả
+                </Label>
+                <Input
+                  id="edit-author"
+                  value={editAuthor}
+                  onChange={(e) => setEditAuthor(e.target.value)}
+                  placeholder="Tên tác giả..."
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-foreground font-semibold">Thể loại</Label>
+                <Select value={editGenre} onValueChange={setEditGenre}>
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Chọn thể loại" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Không chọn</SelectItem>
+                    {GENRES.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-description" className="text-foreground font-semibold">
+                Mô tả
+              </Label>
+              <Textarea
+                id="edit-description"
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Viết vài dòng giới thiệu..."
+                className="min-h-[120px] rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-foreground font-semibold">Quyền riêng tư</Label>
+              <Select value={editPrivacy} onValueChange={(v) => setEditPrivacy(v as BookPrivacy)}>
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Chọn quyền riêng tư" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIVACY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label} — {opt.desc}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Lưu ý: Quyền riêng tư hiện đang lưu trên máy (local), chưa đồng bộ lên database.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)} className="rounded-xl">
+              Hủy
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              className="rounded-xl"
+              disabled={!book || !editTitle.trim() || updateBook.isPending}
+            >
+              {updateBook.isPending ? "Đang lưu..." : "Lưu"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

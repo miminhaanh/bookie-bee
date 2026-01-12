@@ -225,6 +225,11 @@ const Upload = () => {
 
     setIsUploading(true);
     try {
+      const pdfTotalPages =
+        format === "pdf"
+          ? (await getDocument({ data: await uploadedFile.arrayBuffer() }).promise).numPages
+          : null;
+
       const extractedToc =
         format === "pdf" ? await extractPdfToc(uploadedFile) : null;
 
@@ -260,7 +265,7 @@ const Upload = () => {
         status: "to_read",
         progress: 0,
         current_position: null,
-        total_pages: null,
+        total_pages: pdfTotalPages,
         current_page: 0,
         toc: extractedToc as unknown as Json,
         estimated_time_remaining: null,

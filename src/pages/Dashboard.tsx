@@ -41,6 +41,8 @@ const Dashboard = () => {
   const [savedBooks, setSavedBooks] = useState<BookWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+  const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -65,7 +67,7 @@ const Dashboard = () => {
             .eq("user_id", user.id),
           supabase
             .from("profiles")
-            .select("current_streak")
+            .select("current_streak, avatar_url, display_name")
             .eq("user_id", user.id)
             .maybeSingle(),
         ]);
@@ -89,6 +91,9 @@ const Dashboard = () => {
         readingBooks: reading.length,
         readingStreak: profileData?.current_streak ?? 0,
       });
+
+      setProfileAvatarUrl(profileData?.avatar_url ?? null);
+      setProfileDisplayName(profileData?.display_name ?? null);
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -100,12 +105,12 @@ const Dashboard = () => {
   const demoReadingBooks: BookWithProgress[] = [
     { id: "1", title: "Nhà Giả Kim", author: "Paulo Coelho", cover_url: null, progress: 65, status: "reading" },
     { id: "2", title: "Đắc Nhân Tâm", author: "Dale Carnegie", cover_url: null, progress: 30, status: "reading" },
-    { id: "3", title: "Tư Duy Nhanh và Chậm", author: "Daniel Kahneman", cover_url: null, progress: 45, status: "reading" },
+    { id: "3", title: "Tâm Lý Học Tội Phạm", author: "Nhiều tác giả", cover_url: null, progress: 15, status: "reading" },
   ];
 
   const demoCompletedBooks: BookWithProgress[] = [
-    { id: "4", title: "Atomic Habits", author: "James Clear", cover_url: null, progress: 100, status: "completed" },
-    { id: "5", title: "Sapiens", author: "Yuval Noah Harari", cover_url: null, progress: 100, status: "completed" },
+    { id: "4", title: "Sapiens", author: "Yuval Noah Harari", cover_url: null, progress: 100, status: "completed" },
+    { id: "5", title: "Atomic Habits", author: "James Clear", cover_url: null, progress: 100, status: "completed" },
   ];
 
   const demoSavedBooks: BookWithProgress[] = [
@@ -156,7 +161,13 @@ const Dashboard = () => {
                 <div className="grid lg:grid-cols-3 gap-6">
                   {/* Profile Card - Takes 2 columns on large screens */}
                   <div className="lg:col-span-2">
-                    <ProfileCard level={5} xp={350} xpToNextLevel={500} />
+                          <ProfileCard
+                            level={5}
+                            xp={350}
+                            xpToNextLevel={500}
+                            avatarUrl={profileAvatarUrl}
+                            displayName={profileDisplayName}
+                          />
                   </div>
 
                   {/* Stats Cards */}

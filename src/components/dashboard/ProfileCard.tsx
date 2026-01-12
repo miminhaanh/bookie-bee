@@ -6,6 +6,8 @@ interface ProfileCardProps {
   level?: number;
   xp?: number;
   xpToNextLevel?: number;
+  avatarUrl?: string | null;
+  displayName?: string | null;
 }
 
 const LEVEL_TITLES: Record<number, { title: string; icon: string }> = {
@@ -24,9 +26,15 @@ const LEVEL_TITLES: Record<number, { title: string; icon: string }> = {
 export function ProfileCard({ 
   level = 5, 
   xp = 350, 
-  xpToNextLevel = 500 
+  xpToNextLevel = 500,
+  avatarUrl,
+  displayName,
 }: ProfileCardProps) {
   const { user } = useAuth();
+
+  const resolvedAvatarUrl = (avatarUrl ?? "").trim() || user?.user_metadata?.avatar_url;
+  const resolvedDisplayName = (displayName ?? "").trim() || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Người dùng";
+  const initials = resolvedDisplayName.slice(0, 1).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U";
   
   const levelInfo = LEVEL_TITLES[level] || LEVEL_TITLES[5];
   const xpProgress = (xp / xpToNextLevel) * 100;
@@ -41,9 +49,9 @@ export function ProfileCard({
         {/* Avatar */}
         <div className="relative">
           <Avatar className="w-16 h-16 border-4 border-warm-pink/30 shadow-lg">
-            <AvatarImage src={user?.user_metadata?.avatar_url} />
+            <AvatarImage src={resolvedAvatarUrl} />
             <AvatarFallback className="bg-gradient-to-br from-warm-pink to-coral text-primary-foreground text-xl font-bold">
-              {user?.email?.charAt(0).toUpperCase() || 'U'}
+              {initials}
             </AvatarFallback>
           </Avatar>
           {/* Level badge */}
@@ -55,7 +63,7 @@ export function ProfileCard({
         {/* User Info */}
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-lg text-foreground truncate">
-            {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Người dùng'}
+            {resolvedDisplayName}
           </h3>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="text-lg">{levelInfo.icon}</span>

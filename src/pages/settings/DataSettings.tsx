@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import BottomNav from "@/components/BottomNav";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -112,9 +112,10 @@ const DataSettingsPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20 pb-20">
+    <DashboardLayout mobileTitle="Dữ liệu">
+      <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/30">
+      <header className="sticky top-16 lg:top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/30">
         <div className="flex items-center gap-3 px-4 py-3">
           <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-muted/50 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -247,8 +248,8 @@ const DataSettingsPage = () => {
         </DialogContent>
       </Dialog>
 
-      <BottomNav />
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

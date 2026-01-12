@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import BottomNav from "@/components/BottomNav";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks } from "@/hooks/useBooks";
 import { useHighlights } from "@/hooks/useHighlights";
@@ -141,8 +141,9 @@ const Notes = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-secondary/10 pb-20 safe-area-top">
-      <main className="container mx-auto px-4 pt-10 pb-12">
+    <DashboardLayout mobileTitle="Highlights">
+      <div className="min-h-screen bg-gradient-to-br from-background via-primary/5 to-secondary/10 safe-area-top">
+        <main className="container mx-auto px-4 pt-10 pb-12">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-primary/15 to-accent/10 mb-4 border border-border/60">
@@ -331,10 +332,9 @@ const Notes = () => {
             ))}
           </div>
         )}
-      </main>
-
-      <BottomNav />
-    </div>
+        </main>
+      </div>
+    </DashboardLayout>
   );
 };
 

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Check, Bell, Heart, Calendar, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import BottomNav from "@/components/BottomNav";
+import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -107,9 +107,10 @@ const NotificationSettingsPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20 pb-20">
+    <DashboardLayout mobileTitle="Thông báo">
+      <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/30">
+      <header className="sticky top-16 lg:top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/30">
         <div className="flex items-center gap-3 px-4 py-3">
           <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-muted/50 rounded-lg">
             <ArrowLeft className="w-5 h-5" />
@@ -183,7 +184,7 @@ const NotificationSettingsPage = () => {
 
       {/* Save Button */}
       {hasChanges && (
-        <div className="fixed bottom-20 left-4 right-4 z-40">
+        <div className="fixed bottom-6 left-4 right-4 z-40 md:left-[calc(var(--sidebar-width)+1.5rem)] md:right-6">
           <Button
             onClick={saveSettings}
             disabled={isSaving}
@@ -195,8 +196,8 @@ const NotificationSettingsPage = () => {
         </div>
       )}
 
-      <BottomNav />
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

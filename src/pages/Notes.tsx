@@ -149,8 +149,8 @@ const Notes = () => {
             <Sparkles className="w-4 h-4 text-primary" />
             <span className="text-sm font-medium text-primary">Bộ sưu tập của bạn</span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent mb-2">
-            Ghi chú & Highlight
+          <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-warm-pink via-coral to-peach bg-clip-text text-transparent mb-2">
+            📝 Ghi chú & Highlight
           </h1>
           <p className="text-muted-foreground">Lưu giữ những khoảnh khắc đọc sách đáng nhớ</p>
         </div>

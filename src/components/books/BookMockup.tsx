@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { ModernBookCover } from "@/components/ModernBookCover";
+import { ModernBookCover } from "@/components/books/ModernBookCover";
 
 interface BookMockupProps {
   title: string;

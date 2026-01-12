@@ -18,6 +18,7 @@ export interface Highlight {
   updated_at: string;
 }
 
+
 export const useHighlights = (bookId?: string) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -100,6 +101,8 @@ export const useHighlights = (bookId?: string) => {
       queryClient.invalidateQueries({ queryKey: ["highlights", user?.id] });
     },
   });
+
+
 
   return {
     highlights,

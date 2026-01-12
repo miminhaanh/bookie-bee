@@ -72,6 +72,10 @@ export default {
         sky: "hsl(var(--sky))",
         "warm-brown": "hsl(var(--warm-brown))",
         "light-brown": "hsl(var(--light-brown))",
+        // Highlight colors (pastel)
+        "highlight-yellow": "hsl(var(--highlight-yellow))",
+        "highlight-blue": "hsl(var(--highlight-blue))",
+        "highlight-red": "hsl(var(--highlight-red))",
       },
       borderRadius: {
         lg: "var(--radius)",

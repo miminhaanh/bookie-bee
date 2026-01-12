@@ -17,7 +17,7 @@ import {
   Trash2,
   User,
 } from "lucide-react";
-import { BookDescription, BookTitle, ModernBookCover } from "@/components/ModernBookCover";
+import { BookDescription, BookTitle, ModernBookCover } from "@/components/books/ModernBookCover";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -248,10 +248,10 @@ const BookDetail = () => {
     <div className="min-h-screen overflow-hidden bg-background">
       {/* Decorative Background */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-primary/25 to-accent/15 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-secondary/25 to-primary/10 rounded-full blur-3xl animate-pulse [animation-delay:250ms]" />
-        <div className="absolute bottom-20 right-20 w-72 h-72 bg-gradient-to-br from-accent/25 to-secondary/10 rounded-full blur-3xl animate-pulse [animation-delay:500ms]" />
-        <div className="absolute bottom-40 left-1/3 w-60 h-60 bg-gradient-to-br from-primary/20 to-secondary/10 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-warm-pink/30 to-coral/20 rounded-full blur-3xl animate-pulse-soft" />
+        <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-lavender/30 to-sky/20 rounded-full blur-3xl animate-float" />
+        <div className="absolute bottom-20 right-20 w-72 h-72 bg-gradient-to-br from-sage/30 to-soft-sage/20 rounded-full blur-3xl animate-bounce-soft" />
+        <div className="absolute bottom-40 left-1/3 w-60 h-60 bg-gradient-to-br from-peach/30 to-soft-pink/20 rounded-full blur-3xl" />
       </div>
 
       <main className="container mx-auto px-4 py-6">
@@ -420,7 +420,7 @@ const BookDetail = () => {
           {/* Introduction */}
           <div className="rounded-3xl p-6 space-y-4 border border-border/60 bg-card/60 backdrop-blur">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-secondary to-primary flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-lavender to-sky flex items-center justify-center">
                 <FileText className="w-6 h-6 text-primary-foreground" />
               </div>
               <h2 className="text-xl font-bold text-foreground">Giới thiệu</h2>
@@ -436,7 +436,7 @@ const BookDetail = () => {
           {/* Table of Contents */}
           <div className="rounded-3xl p-6 space-y-4 border border-border/60 bg-card/60 backdrop-blur">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-secondary flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sage to-soft-sage flex items-center justify-center">
                 <List className="w-6 h-6 text-primary-foreground" />
               </div>
               <h2 className="text-xl font-bold text-foreground">Mục lục</h2>
@@ -566,15 +566,15 @@ const BookDetail = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-primary/10 to-transparent border border-primary/15">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-soft-pink/50 to-transparent border border-warm-pink/20">
               <p className="text-sm text-muted-foreground mb-1">Bắt đầu</p>
               <p className="font-bold text-foreground">{formatViDate(startedAt)}</p>
             </div>
-            <div className="p-4 rounded-xl bg-gradient-to-br from-secondary/10 to-transparent border border-secondary/15">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-soft-sage/50 to-transparent border border-sage/20">
               <p className="text-sm text-muted-foreground mb-1">Gần nhất</p>
               <p className="font-bold text-foreground">{formatViDate(lastReadAt)}</p>
             </div>
-            <div className="p-4 rounded-xl bg-gradient-to-br from-accent/10 to-transparent border border-accent/15">
+            <div className="p-4 rounded-xl bg-gradient-to-br from-lavender/30 to-transparent border border-lavender/20">
               <p className="text-sm text-muted-foreground mb-1">Ước tính còn lại</p>
               <p className="font-bold text-foreground">
                 {estimatedMinutes ? `${estimatedMinutes} phút` : "-"}

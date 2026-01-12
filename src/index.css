@@ -54,6 +54,11 @@
     --warm-brown: 25 30% 35%;
     --light-brown: 30 25% 60%;
 
+    /* Highlight colors (pastel) */
+    --highlight-yellow: 45 95% 86%;
+    --highlight-blue: 205 90% 86%;
+    --highlight-red: 0 90% 86%;
+
     /* Gradients */
     --gradient-cozy: linear-gradient(135deg, hsl(35 30% 97%) 0%, hsl(350 60% 96%) 100%);
     --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(35 25% 98%) 100%);
@@ -75,6 +80,11 @@
     --sidebar-accent-foreground: 350 50% 40%;
     --sidebar-border: 35 20% 90%;
     --sidebar-ring: 350 70% 72%;
+
+    /* Highlight colors (pastel) */
+    --highlight-yellow: 48 95% 80%;
+    --highlight-blue: 200 95% 82%;
+    --highlight-red: 0 95% 82%;
   }
 
   .dark {
@@ -118,6 +128,11 @@
     --warm-brown: 25 20% 75%;
     --light-brown: 30 15% 50%;
 
+    /* Highlight colors (pastel) */
+    --highlight-yellow: 45 55% 35%;
+    --highlight-blue: 205 55% 35%;
+    --highlight-red: 0 55% 35%;
+
     --gradient-cozy: linear-gradient(135deg, hsl(25 20% 10%) 0%, hsl(25 18% 14%) 100%);
     --gradient-card: linear-gradient(180deg, hsl(25 18% 16%) 0%, hsl(25 18% 12%) 100%);
     --gradient-pink: linear-gradient(135deg, hsl(350 65% 60%) 0%, hsl(350 55% 50%) 100%);
@@ -134,6 +149,11 @@
     --sidebar-accent-foreground: 350 50% 80%;
     --sidebar-border: 25 15% 18%;
     --sidebar-ring: 350 65% 65%;
+
+    /* Highlight colors (pastel, tuned for dark bg) */
+    --highlight-yellow: 48 95% 75%;
+    --highlight-blue: 200 95% 75%;
+    --highlight-red: 0 95% 75%;
   }
 }
 

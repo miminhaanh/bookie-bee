@@ -10,7 +10,7 @@ import {
   ModernBookCover,
   BookTitle,
   BookDescription
-} from "@/components/ModernBookCover";
+} from "@/components/books/ModernBookCover";
 
 // Hooks
 import { useAuth } from "@/hooks/useAuth";
@@ -178,7 +178,7 @@ const Index = () => {
               placeholder="Tìm sách..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 bg-secondary/50 border-none shadow-inner"
+              className="pl-9 bg-soft-pink/30 border-warm-pink/20 shadow-inner focus-visible:ring-warm-pink/30"
             />
           </div>
           <Button

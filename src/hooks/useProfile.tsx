@@ -11,6 +11,7 @@ export interface Profile {
   phone_number: string | null;
   gender: string | null;
   bio: string | null;
+  language?: string | null;
   current_streak: number;
   longest_streak: number;
   last_read_date: string | null;

@@ -3,10 +3,11 @@ import { motion } from "framer-motion";
 
 interface StatsCardsProps {
   totalBooks: number;
+  completedBooks: number;
   streak: number;
 }
 
-export function StatsCards({ totalBooks, streak }: StatsCardsProps) {
+export function StatsCards({ totalBooks, completedBooks, streak }: StatsCardsProps) {
   return (
     <div className="grid grid-cols-2 gap-4">
       {/* Books Read Card */}
@@ -22,8 +23,9 @@ export function StatsCards({ totalBooks, streak }: StatsCardsProps) {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-warm-pink to-coral flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
             <BookOpen className="w-6 h-6 text-primary-foreground" />
           </div>
-          <p className="text-3xl font-bold text-foreground">{totalBooks}</p>
+          <p className="text-3xl font-bold text-foreground">{completedBooks}</p>
           <p className="text-sm text-muted-foreground">Sách đã đọc</p>
+          <p className="text-xs text-muted-foreground/80">Tổng: {totalBooks}</p>
         </div>
       </motion.div>
 

@@ -138,6 +138,20 @@ const Dashboard = () => {
     );
   };
 
+  const hasAnyRealBooks =
+    currentlyReading.length + completedBooks.length + savedBooks.length > 0;
+
+  const booksForStats = hasAnyRealBooks
+    ? [...currentlyReading, ...completedBooks, ...savedBooks]
+    : [...demoReadingBooks, ...demoCompletedBooks, ...demoSavedBooks];
+
+  // Consider a book "read" if it's completed OR progress is near the end (98% - 100%).
+  const booksReadCount = booksForStats.filter(
+    (b) => b.status === "completed" || (b.progress ?? 0) >= 98
+  ).length;
+
+  const totalBooksCount = booksForStats.length;
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -173,7 +187,8 @@ const Dashboard = () => {
                   {/* Stats Cards */}
                   <div>
                     <StatsCards
-                      totalBooks={stats.totalBooks || displayReadingBooks.length + displayCompletedBooks.length}
+                      totalBooks={totalBooksCount}
+                      completedBooks={booksReadCount}
                       streak={stats.readingStreak}
                     />
                   </div>

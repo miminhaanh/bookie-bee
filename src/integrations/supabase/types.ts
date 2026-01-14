@@ -176,6 +176,7 @@ export type Database = {
           default_reader_theme: string | null
           display_name: string | null
           id: string
+          language: string | null
           last_read_date: string | null
           longest_streak: number | null
           updated_at: string | null
@@ -190,6 +191,7 @@ export type Database = {
           default_reader_theme?: string | null
           display_name?: string | null
           id?: string
+          language?: string | null
           last_read_date?: string | null
           longest_streak?: number | null
           updated_at?: string | null
@@ -204,6 +206,7 @@ export type Database = {
           default_reader_theme?: string | null
           display_name?: string | null
           id?: string
+          language?: string | null
           last_read_date?: string | null
           longest_streak?: number | null
           updated_at?: string | null

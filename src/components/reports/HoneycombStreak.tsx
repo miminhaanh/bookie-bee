@@ -33,7 +33,7 @@ const HexCell = ({
   };
 
   // Hình dáng lục giác chuẩn
-  const hexPath = "M50 5 L95 27.5 L95 72.5 L50 95 L5 72.5 L5 27.5 Z";
+  const hexPath = "M54 6 L88 25 Q95 29 95 38 V62 Q95 71 88 75 L54 94 Q50 96 46 94 L12 75 Q5 71 5 62 V38 Q5 29 12 25 L46 6 Q50 4 54 6 Z";
   
   const isActive = filled || justFilled;
 
@@ -91,7 +91,7 @@ const HexCell = ({
           fill={isActive ? `url(#shell-gradient-${index})` : `url(#empty-gradient-${index})`}
           // Viền vàng khi active, xám đậm khi chưa
           stroke={isActive ? "#FCD34D" : "#D1D5DB"} 
-          strokeWidth="6"
+          strokeWidth="10"
           strokeLinejoin="round"
           initial={false}
         />
@@ -103,7 +103,7 @@ const HexCell = ({
              d={hexPath}
              fill="none"
              stroke="#FFFFFF"
-             strokeWidth="3"
+             strokeWidth="4"
              strokeOpacity="0.8"
              transform="scale(0.82)"
              style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
@@ -127,28 +127,32 @@ const HexCell = ({
 
         {/* --- LAYER 4: HIGHLIGHTS (BÓNG KÍNH HOẠT HÌNH) --- */}
         
-        {/* Highlight 1: Đường cong trắng trên đỉnh vỏ ngoài */}
-        {isActive && (
-            <motion.path
-                d="M 30 8 Q 50 2 70 8" // Đường cong vòm trên
-                fill="none"
-                stroke="white"
-                strokeWidth="5" // Dày hơn để giống hoạt hình
-                strokeLinecap="round"
-                opacity="0.9"
-            />
-        )}
         
         {/* Highlight 2: Hình bầu dục nghiêng trên lõi mật */}
         {isActive && (
              <motion.ellipse
-             cx="38" // Lệch trái một chút so với tâm (50)
-             cy="38" // Lệch lên trên một chút so với tâm (50)
+             cx="36" // Lệch trái một chút so với tâm (50)
+             cy="40" // Lệch lên trên một chút so với tâm (50)
              rx="8"
-             ry="4"
+             ry="5"
              fill="white"
              opacity="0.8"
-             transform="rotate(-45 38 38)" // Xoay nghiêng 45 độ quanh tâm chính nó
+             transform="rotate(-50 38 38)" // Xoay nghiêng 45 độ quanh tâm chính nó
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 0.8 }}
+             transition={{ delay: 0.2 }}
+           />
+        )}
+
+        {isActive && (
+             <motion.ellipse
+             cx="20" // Lệch trái một chút so với tâm (50)
+             cy="34" // Lệch lên trên một chút so với tâm (50)
+             rx="5.5"
+             ry="3.5"
+             fill="white"
+             opacity="0.4"
+             transform="rotate(-90 38 38)" // Xoay nghiêng 45 độ quanh tâm chính nó
              initial={{ opacity: 0 }}
              animate={{ opacity: 0.8 }}
              transition={{ delay: 0.2 }}
@@ -207,8 +211,8 @@ export const HoneycombStreak = ({ streakDays, currentStreak, freezesAvailable }:
             style={{ 
                 // Điều chỉnh offset cho hàng chẵn/lẻ để khớp tổ ong
                 // Width = 54 -> Half width = 27. Margin left ~27px để so le.
-                marginLeft: rowIndex % 2 === 1 ? 27 : 0, 
-                marginBottom: -4 // Âm margin để các hàng khít vào nhau theo chiều dọc
+                marginLeft: rowIndex % 2 === 1 ? 60 : 0, 
+                marginBottom: 0 // Âm margin để các hàng khít vào nhau theo chiều dọc
             }} 
           >
             {row.map((filled, cellIndex) => (

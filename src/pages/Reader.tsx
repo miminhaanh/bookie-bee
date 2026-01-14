@@ -9,8 +9,10 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Trash2,
   Minus,
   Plus,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -21,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useReadingSession } from "@/hooks/useReadingSession";
 import { useSaveReadingProgress } from "@/hooks/useSaveReadingProgress";
 import { useHighlights, type Highlight as DbHighlight } from "@/hooks/useHighlights";
+import { useProfile } from "@/hooks/useProfile";
 import { cn } from "@/lib/utils";
 import ePub from "epubjs";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +66,58 @@ const getHighlightAreasFromDb = (h: DbHighlight): HighlightArea[] => {
   } catch {
     return [];
   }
+};
+
+const rectOverlapScore = (a: Pick<HighlightArea, "left" | "top" | "width" | "height">, b: Pick<HighlightArea, "left" | "top" | "width" | "height">) => {
+  const ax1 = a.left;
+  const ay1 = a.top;
+  const ax2 = a.left + a.width;
+  const ay2 = a.top + a.height;
+  const bx1 = b.left;
+  const by1 = b.top;
+  const bx2 = b.left + b.width;
+  const by2 = b.top + b.height;
+
+  const ix1 = Math.max(ax1, bx1);
+  const iy1 = Math.max(ay1, by1);
+  const ix2 = Math.min(ax2, bx2);
+  const iy2 = Math.min(ay2, by2);
+
+  const iw = Math.max(0, ix2 - ix1);
+  const ih = Math.max(0, iy2 - iy1);
+  const intersection = iw * ih;
+  const areaA = Math.max(0, a.width) * Math.max(0, a.height);
+  const areaB = Math.max(0, b.width) * Math.max(0, b.height);
+  if (areaA <= 0 || areaB <= 0) return 0;
+
+  const iou = intersection / (areaA + areaB - intersection);
+  const overlapByMin = intersection / Math.min(areaA, areaB);
+  return Math.max(iou, overlapByMin);
+};
+
+const findOverlappingHighlightIds = (
+  selectionAreas: HighlightArea[] | undefined,
+  existing: DbHighlight[],
+) => {
+  if (!selectionAreas || selectionAreas.length === 0) return [] as string[];
+
+  const ids: string[] = [];
+  for (const h of existing) {
+    const areas = getHighlightAreasFromDb(h);
+    if (areas.length === 0) continue;
+
+    let best = 0;
+    for (const sel of selectionAreas) {
+      for (const a of areas) {
+        if (a.pageIndex !== sel.pageIndex) continue;
+        best = Math.max(best, rectOverlapScore(sel, a));
+      }
+    }
+
+    // Tolerant threshold: a re-selection won't match 100%.
+    if (best >= 0.45) ids.push(h.id);
+  }
+  return ids;
 };
 
 const colorToBackground = (color: DbHighlight["color"]) => {
@@ -108,6 +163,12 @@ const Reader = () => {
   const [isEpubTocLoading, setIsEpubTocLoading] = useState(false);
   const [highlightsList, setHighlightsList] = useState<DbHighlight[]>([]);
   const [isHighlightsLoading, setIsHighlightsLoading] = useState(false);
+
+  const [isTranslateOpen, setIsTranslateOpen] = useState(false);
+  const [translateSourceText, setTranslateSourceText] = useState<string>("");
+  const [translatedText, setTranslatedText] = useState<string>("");
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
   const epubRef = useRef<HTMLDivElement | null>(null);
   const renditionRef = useRef<unknown>(null);
   const bookRef = useRef<unknown>(null);
@@ -116,6 +177,7 @@ const Reader = () => {
   
   const hideUITimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { user, loading: authLoading } = useAuth();
+  const { profile } = useProfile();
   const { books, updateBook } = useBooks();
   const navigate = useNavigate();
   const location = useLocation();
@@ -171,7 +233,7 @@ const Reader = () => {
   }, [fileUrl]);
 
   // Highlights hook for saving highlights
-  const { addHighlight } = useHighlights(id);
+  const { addHighlight, deleteHighlight } = useHighlights(id);
 
   // Fetch highlights for the current page ONLY after user actually navigates to a page
   useEffect(() => {
@@ -258,6 +320,24 @@ const Reader = () => {
       const pageNumber = (props.highlightAreas?.[0]?.pageIndex ?? currentPageRef.current - 1) + 1;
       setHasVisitedPage(true);
 
+      // If user re-selects an already-highlighted region, treat it as a toggle: delete old highlight(s).
+      const overlappingIds = findOverlappingHighlightIds(props.highlightAreas, pageHighlights);
+      if (overlappingIds.length > 0) {
+        try {
+          for (const hid of overlappingIds) {
+            await deleteHighlight.mutateAsync(hid);
+          }
+          setPageHighlights((prev) => prev.filter((h) => !overlappingIds.includes(h.id)));
+          setHighlightsList((prev) => prev.filter((h) => !overlappingIds.includes(h.id)));
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("Failed to delete existing highlight:", err);
+        } finally {
+          props.cancel();
+        }
+        return;
+      }
+
       try {
         const inserted = await addHighlight.mutateAsync({
           book_id: id,
@@ -282,43 +362,145 @@ const Reader = () => {
         props.cancel();
       }
     },
-    [addHighlight, id],
+    [addHighlight, deleteHighlight, id, pageHighlights],
   );
 
   const renderHighlightTarget = useCallback(
-    (props: RenderHighlightTargetProps) => (
-      <div
-        className="flex items-center gap-2 rounded-md border border-border bg-background/95 px-2 py-1 shadow-sm"
-        style={{
-          position: "absolute",
-          left: `${props.selectionRegion.left}%`,
-          top: `${props.selectionRegion.top + props.selectionRegion.height}%`,
-          transform: "translate(0, 8px)",
-          zIndex: 20,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          aria-label="Highlight vàng"
-          className="h-5 w-5 rounded-full border border-border bg-highlight-yellow"
-          onClick={() => void savePdfHighlight(props, "yellow")}
-        />
-        <button
-          type="button"
-          aria-label="Highlight xanh"
-          className="h-5 w-5 rounded-full border border-border bg-highlight-blue"
-          onClick={() => void savePdfHighlight(props, "blue")}
-        />
-        <button
-          type="button"
-          aria-label="Highlight đỏ"
-          className="h-5 w-5 rounded-full border border-border bg-highlight-red"
-          onClick={() => void savePdfHighlight(props, "red")}
-        />
-      </div>
-    ),
-    [savePdfHighlight],
+    (props: RenderHighlightTargetProps) => {
+      const overlappingIds = findOverlappingHighlightIds(props.highlightAreas, pageHighlights);
+      const selectedText = (props.selectedText ?? "").trim();
+
+      const translateSelection = async () => {
+        if (!selectedText) return;
+
+        setIsTranslateOpen(true);
+        setTranslateSourceText(selectedText);
+        setTranslatedText("");
+        setTranslateError(null);
+        setIsTranslating(true);
+
+        try {
+          const endpoint = import.meta.env.VITE_TRANSLATE_ENDPOINT as string | undefined;
+          const apiKey = import.meta.env.VITE_TRANSLATE_API_KEY as string | undefined;
+          const targetLanguage = (profile?.language ?? "vi") as string;
+
+          if (!endpoint) {
+            throw new Error("Chưa cấu hình VITE_TRANSLATE_ENDPOINT");
+          }
+
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+              q: selectedText,
+              source: "auto",
+              target: targetLanguage,
+              format: "text",
+            }),
+          });
+
+          if (!res.ok) {
+            throw new Error(`Translate failed: ${res.status}`);
+          }
+
+          const data = (await res.json()) as {
+            translatedText?: string;
+            translated_text?: string;
+          };
+
+          const t = (data.translatedText ?? data.translated_text ?? "").trim();
+          if (!t) throw new Error("Không nhận được nội dung dịch");
+          setTranslatedText(t);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Dịch thất bại";
+          setTranslateError(msg);
+        } finally {
+          setIsTranslating(false);
+        }
+      };
+
+      return (
+        <div
+          className="flex items-center gap-2 rounded-md border border-border bg-background/95 px-2 py-1 shadow-sm"
+          style={{
+            position: "absolute",
+            left: `${props.selectionRegion.left}%`,
+            top: `${props.selectionRegion.top + props.selectionRegion.height}%`,
+            transform: "translate(0, 8px)",
+            zIndex: 20,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {overlappingIds.length > 0 ? (
+            <>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/70"
+                aria-label="Xoá highlight"
+                onClick={() => void savePdfHighlight(props, "yellow")}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Xoá highlight
+              </button>
+
+              {selectedText ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/70"
+                  aria-label="Dịch đoạn đã chọn"
+                  onClick={() => {
+                    void translateSelection();
+                    props.cancel();
+                  }}
+                >
+                  <Search className="h-3.5 w-3.5" />
+                  Dịch
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                aria-label="Highlight vàng"
+                className="h-5 w-5 rounded-full border border-border bg-highlight-yellow"
+                onClick={() => void savePdfHighlight(props, "yellow")}
+              />
+              <button
+                type="button"
+                aria-label="Highlight xanh"
+                className="h-5 w-5 rounded-full border border-border bg-highlight-blue"
+                onClick={() => void savePdfHighlight(props, "blue")}
+              />
+              <button
+                type="button"
+                aria-label="Highlight đỏ"
+                className="h-5 w-5 rounded-full border border-border bg-highlight-red"
+                onClick={() => void savePdfHighlight(props, "red")}
+              />
+
+              {selectedText ? (
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm hover:bg-muted"
+                  aria-label="Dịch đoạn đã chọn"
+                  onClick={() => {
+                    void translateSelection();
+                    props.cancel();
+                  }}
+                >
+                  <Search className="h-4 w-4" />
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
+      );
+    },
+    [pageHighlights, savePdfHighlight],
   );
 
   const renderHighlights = useCallback(
@@ -604,6 +786,51 @@ const Reader = () => {
       )}
       onClick={handleTap}
     >
+      {isTranslateOpen ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsTranslateOpen(false);
+          }}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl border border-border bg-background/70 p-4 shadow-float backdrop-blur-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Bản dịch"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">Dịch từ đoạn bôi đậm</p>
+                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{translateSourceText}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsTranslateOpen(false)}
+                aria-label="Đóng"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="mt-3">
+              {isTranslating ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Đang dịch...
+                </div>
+              ) : translateError ? (
+                <p className="text-sm text-destructive">{translateError}</p>
+              ) : (
+                <p className="text-base text-foreground">{translatedText}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Book layer (background) */}
       <div className="absolute inset-0 z-0">
         {shouldRedirectToAuth ? null : !book ? (

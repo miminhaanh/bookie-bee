@@ -7,6 +7,14 @@ import { Switch } from "@/components/ui/switch";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { useProfile } from "@/hooks/useProfile";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ReadingSettings {
   fontFamily: string;
@@ -15,6 +23,7 @@ interface ReadingSettings {
   readingBackground: "light" | "dark" | "sepia";
   nightMode: boolean;
   pageFlipEffect: boolean;
+  language: string;
 }
 
 const FONT_OPTIONS = [
@@ -37,12 +46,19 @@ const DEFAULT_SETTINGS: ReadingSettings = {
   readingBackground: "light",
   nightMode: false,
   pageFlipEffect: true,
+  language: "vi",
 };
+
+const LANGUAGE_OPTIONS = [
+  { value: "vi", label: "Tiếng Việt" },
+  { value: "en", label: "English" },
+];
 
 const ReadingSettingsPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { profile, updateProfile } = useProfile();
   const [settings, setSettings] = useState<ReadingSettings>(DEFAULT_SETTINGS);
   const [originalSettings, setOriginalSettings] = useState<ReadingSettings>(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
@@ -57,6 +73,14 @@ const ReadingSettingsPage = () => {
     }
   }, [user?.id]);
 
+  // Hydrate language from Supabase profile (source of truth for language)
+  useEffect(() => {
+    const lang = profile?.language;
+    if (!lang) return;
+    setSettings((prev) => ({ ...prev, language: lang }));
+    setOriginalSettings((prev) => ({ ...prev, language: lang }));
+  }, [profile?.language]);
+
   useEffect(() => {
     setHasChanges(JSON.stringify(settings) !== JSON.stringify(originalSettings));
   }, [settings, originalSettings]);
@@ -69,6 +93,11 @@ const ReadingSettingsPage = () => {
     setIsSaving(true);
     try {
       localStorage.setItem(`reading_settings_${user?.id}`, JSON.stringify(settings));
+
+      if (user?.id) {
+        await updateProfile.mutateAsync({ language: settings.language });
+      }
+
       setOriginalSettings(settings);
       setHasChanges(false);
       toast({ title: "Đã lưu! 📖" });
@@ -96,6 +125,31 @@ const ReadingSettingsPage = () => {
       </header>
 
       <main className="px-4 py-4 space-y-3">
+        {/* Language */}
+        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm font-medium">🌐 Ngôn ngữ</span>
+          </div>
+          <Select
+            value={settings.language}
+            onValueChange={(v) => updateSetting("language", v)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Chọn ngôn ngữ" />
+            </SelectTrigger>
+            <SelectContent>
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Ngôn ngữ sẽ được lưu vào hồ sơ để dùng xuyên suốt trên mọi thiết bị.
+          </p>
+        </div>
+
         {/* Font Selection */}
         <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30">
           <div className="flex items-center gap-2 mb-3">

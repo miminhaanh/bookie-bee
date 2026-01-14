@@ -1,1 +1,7 @@
 project_id = "eklrloldatjpfyxgdpwd"
+
+[functions]
+# Keep JWT verification enabled (recommended). If you want public access, set verify_jwt = false for the specific function.
+
+[functions.translate]
+verify_jwt = false

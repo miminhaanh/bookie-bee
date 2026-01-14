@@ -52,6 +52,11 @@ const DEFAULT_SETTINGS: ReadingSettings = {
 const LANGUAGE_OPTIONS = [
   { value: "vi", label: "Tiếng Việt" },
   { value: "en", label: "English" },
+  { value: "es", label: "Español" },
+  { value: "fr", label: "Français" },
+  { value: "de", label: "Deutsch" },
+  { value: "ja", label: "日本語" },
+  { value: "ko", label: "한국어" },
 ];
 
 const ReadingSettingsPage = () => {

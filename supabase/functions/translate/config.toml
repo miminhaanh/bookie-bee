@@ -1,0 +1,3 @@
+# Allow browser CORS preflight (OPTIONS) to succeed.
+# The function should still validate requests at the application level if you need auth.
+verify_jwt = false

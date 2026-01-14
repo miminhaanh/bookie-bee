@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   Bookmark,
+  History,
   List,
   Settings,
   Loader2,
@@ -12,14 +13,15 @@ import {
   Trash2,
   Minus,
   Plus,
-  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { TextSelectionToolbar } from "@/components/books/HighlightSelectionToolbar";
 import { useBooks } from "@/hooks/useBooks";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { useReadingSession } from "@/hooks/useReadingSession";
 import { useSaveReadingProgress } from "@/hooks/useSaveReadingProgress";
 import { useHighlights, type Highlight as DbHighlight } from "@/hooks/useHighlights";
@@ -56,6 +58,14 @@ type EpubTocItem = {
   label: string;
   href?: string;
   subitems?: EpubTocItem[];
+};
+
+type TranslateHistoryItem = {
+  id: string;
+  sourceText: string;
+  translatedText: string;
+  target: string;
+  createdAt: string;
 };
 
 const getHighlightAreasFromDb = (h: DbHighlight): HighlightArea[] => {
@@ -134,6 +144,8 @@ const colorToBackground = (color: DbHighlight["color"]) => {
 
 type ReaderTheme = "light" | "dark" | "sepia" | "green";
 
+const SUPPORTED_TRANSLATE_TARGETS = new Set(["vi", "en", "es", "fr", "de", "ja", "ko"]);
+
 const themeStyles: Record<ReaderTheme, { bg: string; text: string; name: string }> = {
   light: { bg: "bg-[hsl(40,33%,98%)]", text: "text-[hsl(20,14%,15%)]", name: "Sáng" },
   dark: { bg: "bg-[hsl(220,20%,10%)]", text: "text-[hsl(40,20%,90%)]", name: "Tối" },
@@ -169,6 +181,8 @@ const Reader = () => {
   const [translatedText, setTranslatedText] = useState<string>("");
   const [isTranslating, setIsTranslating] = useState(false);
   const [translateError, setTranslateError] = useState<string | null>(null);
+  const [isTranslateHistoryOpen, setIsTranslateHistoryOpen] = useState(false);
+  const [translateHistory, setTranslateHistory] = useState<TranslateHistoryItem[]>([]);
   const epubRef = useRef<HTMLDivElement | null>(null);
   const renditionRef = useRef<unknown>(null);
   const bookRef = useRef<unknown>(null);
@@ -177,10 +191,94 @@ const Reader = () => {
   
   const hideUITimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
   const { profile } = useProfile();
   const { books, updateBook } = useBooks();
   const navigate = useNavigate();
   const location = useLocation();
+  const lastHighlightSelectionCrashAtRef = useRef(0);
+
+  // Workaround: prevent a known @react-pdf-viewer/highlight crash when selection is extremely long.
+  // This keeps the app usable and prompts the user to select a smaller range.
+  useEffect(() => {
+    const onError = (e: ErrorEvent) => {
+      const message = String(e?.message ?? "");
+      const filename = String(e?.filename ?? "");
+
+      const fromHighlightPlugin = filename.includes("@react-pdf-viewer_highlight");
+      const isKnownSelectionCrash =
+        message.includes("Invalid array length") ||
+        message.includes("Cannot read properties of null") && message.includes("textContent");
+
+      if (!fromHighlightPlugin || !isKnownSelectionCrash) return;
+
+      const now = Date.now();
+      if (now - lastHighlightSelectionCrashAtRef.current < 1200) {
+        e.preventDefault();
+        return;
+      }
+      lastHighlightSelectionCrashAtRef.current = now;
+
+      e.preventDefault();
+      try {
+        window.getSelection()?.removeAllRanges();
+      } catch {
+        // ignore
+      }
+      toast({
+        title: "Selection quá dài/khó xử lý",
+        description: "Hãy thử bôi đậm ngắn hơn (ít dòng hơn, trong 1 đoạn/trang) rồi thao tác lại.",
+        variant: "destructive",
+      });
+    };
+
+    window.addEventListener("error", onError);
+    return () => {
+      window.removeEventListener("error", onError);
+    };
+  }, [toast]);
+
+  // Load & persist translate history per user
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `translate_history_${user.id}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      setTranslateHistory([]);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        setTranslateHistory([]);
+        return;
+      }
+      const safe = parsed
+        .map((x) => x as Partial<TranslateHistoryItem>)
+        .filter((x) => typeof x?.sourceText === "string" && typeof x?.translatedText === "string")
+        .map((x) => ({
+          id: typeof x.id === "string" ? x.id : String(Date.now()),
+          sourceText: x.sourceText ?? "",
+          translatedText: x.translatedText ?? "",
+          target: typeof x.target === "string" ? x.target : "vi",
+          createdAt: typeof x.createdAt === "string" ? x.createdAt : new Date().toISOString(),
+        }))
+        .slice(0, 50);
+      setTranslateHistory(safe);
+    } catch {
+      setTranslateHistory([]);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `translate_history_${user.id}`;
+    try {
+      localStorage.setItem(key, JSON.stringify(translateHistory.slice(0, 50)));
+    } catch {
+      // ignore
+    }
+  }, [translateHistory, user?.id]);
   
   // Start reading session tracking
   const { endSession } = useReadingSession(id || "");
@@ -370,137 +468,79 @@ const Reader = () => {
       const overlappingIds = findOverlappingHighlightIds(props.highlightAreas, pageHighlights);
       const selectedText = (props.selectedText ?? "").trim();
 
-      const translateSelection = async () => {
-        if (!selectedText) return;
+      const addToTranslateHistory = (source: string, translated: string, target: string) => {
+        const id =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? (crypto.randomUUID() as string)
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-        setIsTranslateOpen(true);
-        setTranslateSourceText(selectedText);
-        setTranslatedText("");
-        setTranslateError(null);
-        setIsTranslating(true);
+        const item: TranslateHistoryItem = {
+          id,
+          sourceText: source,
+          translatedText: translated,
+          target,
+          createdAt: new Date().toISOString(),
+        };
 
-        try {
-          const endpoint = import.meta.env.VITE_TRANSLATE_ENDPOINT as string | undefined;
-          const apiKey = import.meta.env.VITE_TRANSLATE_API_KEY as string | undefined;
-          const targetLanguage = (profile?.language ?? "vi") as string;
-
-          if (!endpoint) {
-            throw new Error("Chưa cấu hình VITE_TRANSLATE_ENDPOINT");
-          }
-
-          const res = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-            },
-            body: JSON.stringify({
-              q: selectedText,
-              source: "auto",
-              target: targetLanguage,
-              format: "text",
-            }),
-          });
-
-          if (!res.ok) {
-            throw new Error(`Translate failed: ${res.status}`);
-          }
-
-          const data = (await res.json()) as {
-            translatedText?: string;
-            translated_text?: string;
-          };
-
-          const t = (data.translatedText ?? data.translated_text ?? "").trim();
-          if (!t) throw new Error("Không nhận được nội dung dịch");
-          setTranslatedText(t);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Dịch thất bại";
-          setTranslateError(msg);
-        } finally {
-          setIsTranslating(false);
-        }
+        setTranslateHistory((prev) => [item, ...prev].slice(0, 50));
       };
 
       return (
-        <div
-          className="flex items-center gap-2 rounded-md border border-border bg-background/95 px-2 py-1 shadow-sm"
-          style={{
-            position: "absolute",
-            left: `${props.selectionRegion.left}%`,
-            top: `${props.selectionRegion.top + props.selectionRegion.height}%`,
-            transform: "translate(0, 8px)",
-            zIndex: 20,
+        <TextSelectionToolbar
+          selectionRegion={props.selectionRegion}
+          hasOverlappingHighlights={overlappingIds.length > 0}
+          selectedText={selectedText}
+          initialTargetLanguage={
+            (() => {
+              const rawLang = (profile?.language ?? "vi") as string;
+              return SUPPORTED_TRANSLATE_TARGETS.has(rawLang) ? rawLang : "vi";
+            })()
+          }
+          onCancelSelection={props.cancel}
+          onHighlight={(color) => void savePdfHighlight(props, color)}
+          onDeleteHighlight={() => void savePdfHighlight(props, "yellow")}
+          onTranslateRequest={(source, target) => {
+            setIsTranslateOpen(true);
+            setTranslateSourceText(source);
+            setTranslatedText("");
+            setTranslateError(null);
+            setIsTranslating(true);
+
+            void (async () => {
+              try {
+                const { data, error } = await supabase.functions.invoke("translate", {
+                  body: {
+                    q: source,
+                    target,
+                  },
+                });
+
+                if (error) throw new Error(error.message);
+
+                const payload = data as { translatedText?: string; translated_text?: string; error?: string } | null;
+                if (payload?.error) throw new Error(payload.error);
+
+                const t = (payload?.translatedText ?? payload?.translated_text ?? "").trim();
+                if (!t) throw new Error("Không nhận được nội dung dịch");
+
+                setTranslatedText(t);
+                addToTranslateHistory(source, t, target);
+              } catch (err) {
+                let msg = err instanceof Error ? err.message : "Dịch thất bại";
+                if (msg.includes("Failed to send a request to the Edge Function")) {
+                  msg =
+                    "Không gọi được Edge Function. Hãy chắc chắn bạn đã deploy function 'translate' và đã set secret GEMINI_API_KEY trong Supabase.";
+                }
+                setTranslateError(msg);
+              } finally {
+                setIsTranslating(false);
+              }
+            })();
           }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {overlappingIds.length > 0 ? (
-            <>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/70"
-                aria-label="Xoá highlight"
-                onClick={() => void savePdfHighlight(props, "yellow")}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Xoá highlight
-              </button>
-
-              {selectedText ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1 text-xs text-foreground hover:bg-muted/70"
-                  aria-label="Dịch đoạn đã chọn"
-                  onClick={() => {
-                    void translateSelection();
-                    props.cancel();
-                  }}
-                >
-                  <Search className="h-3.5 w-3.5" />
-                  Dịch
-                </button>
-              ) : null}
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                aria-label="Highlight vàng"
-                className="h-5 w-5 rounded-full border border-border bg-highlight-yellow"
-                onClick={() => void savePdfHighlight(props, "yellow")}
-              />
-              <button
-                type="button"
-                aria-label="Highlight xanh"
-                className="h-5 w-5 rounded-full border border-border bg-highlight-blue"
-                onClick={() => void savePdfHighlight(props, "blue")}
-              />
-              <button
-                type="button"
-                aria-label="Highlight đỏ"
-                className="h-5 w-5 rounded-full border border-border bg-highlight-red"
-                onClick={() => void savePdfHighlight(props, "red")}
-              />
-
-              {selectedText ? (
-                <button
-                  type="button"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-sm hover:bg-muted"
-                  aria-label="Dịch đoạn đã chọn"
-                  onClick={() => {
-                    void translateSelection();
-                    props.cancel();
-                  }}
-                >
-                  <Search className="h-4 w-4" />
-                </button>
-              ) : null}
-            </>
-          )}
-        </div>
+        />
       );
     },
-    [pageHighlights, savePdfHighlight],
+    [pageHighlights, profile, savePdfHighlight],
   );
 
   const renderHighlights = useCallback(
@@ -1055,6 +1095,78 @@ const Reader = () => {
                         {h.note ? (
                           <p className="mt-2 text-sm text-muted-foreground">{h.note}</p>
                         ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            <Sheet open={isTranslateHistoryOpen} onOpenChange={setIsTranslateHistoryOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Xem lịch sử dịch"
+                >
+                  <History className="h-4 w-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <SheetHeader>
+                  <SheetTitle>Lịch sử dịch</SheetTitle>
+                </SheetHeader>
+
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">Lưu trên thiết bị này</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTranslateHistory([])}
+                    disabled={translateHistory.length === 0}
+                  >
+                    Xoá tất cả
+                  </Button>
+                </div>
+
+                <div className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
+                  {translateHistory.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Chưa có bản dịch nào.</p>
+                  ) : (
+                    translateHistory.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="relative w-full rounded-lg border border-border p-3 text-left transition-colors hover:bg-muted"
+                        onClick={() => {
+                          setIsTranslateHistoryOpen(false);
+                          setIsTranslateOpen(true);
+                          setTranslateSourceText(item.sourceText);
+                          setTranslatedText(item.translatedText);
+                          setTranslateError(null);
+                          setIsTranslating(false);
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted-foreground/10 hover:text-foreground"
+                          aria-label="Xoá bản dịch"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setTranslateHistory((prev) => prev.filter((x) => x.id !== item.id));
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>{item.target.toUpperCase()}</span>
+                          <span>{new Date(item.createdAt).toLocaleString()}</span>
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-sm">{item.sourceText}</p>
+                        <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{item.translatedText}</p>
                       </button>
                     ))
                   )}

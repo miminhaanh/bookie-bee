@@ -21,7 +21,6 @@ import { BookInfoTabs } from "./BookInfoTabs";
 import { HighlightsSection } from "./HighlightsSection";
 import { ReadingHistory } from "./ReadingHistory";
 import { BookDetailModals } from "./BookDetailModals";
-import type { BookPrivacy } from "./utils";
 import type { Book } from "@/hooks/useBooks";
 
 export function BookDetailContainer() {
@@ -105,7 +104,6 @@ export function BookDetailContainer() {
     author: string;
     description: string;
     genre: string;
-    privacy: BookPrivacy;
   }) => {
     updateMutation.mutate(data);
   };
@@ -135,11 +133,10 @@ export function BookDetailContainer() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-5xl p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate(-1)}>
+    <div className="min-h-screen bg-[#FFFCF8]">
+      <div className="mx-auto max-w-5xl px-6 py-12">
+        <header className="mb-8 flex items-center justify-between">
+          <Button variant="ghost" className="px-0 text-[#111]" onClick={() => navigate(-1)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Quay lại
           </Button>
@@ -147,7 +144,7 @@ export function BookDetailContainer() {
           {user?.id === book.user_id && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="text-[#111]">
                   <MoreVertical className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
@@ -159,46 +156,38 @@ export function BookDetailContainer() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-        </div>
+        </header>
 
-        {/* Hero */}
-        <BookHero book={book} />
+        <div className="space-y-0">
+          <BookHero book={book} />
 
-        {/* Grid: Progress + Action Buttons */}
-        <div className="grid gap-6 md:grid-cols-[1fr,2fr]">
+          <ActionButtons
+            book={book}
+            canEdit={user?.id === book.user_id}
+            onEditClick={() => setIsEditOpen(true)}
+            onStartReading={handleStartReading}
+          />
+
           <ReadingProgress
             currentPage={book.current_page || 0}
             totalPages={book.total_pages || 0}
           />
 
-          <div className="flex items-center">
-            <ActionButtons
-              book={book}
-              canEdit={user?.id === book.user_id}
-              onEditClick={() => setIsEditOpen(true)}
-              onStartReading={handleStartReading}
-            />
-          </div>
+          <BookInfoTabs description={book.description} tocData={book.toc} />
+
+          <ReadingHistory
+            startedAt={(book as any).started_at}
+            lastReadAt={(book as any).last_read_at}
+            currentPage={book.current_page || 0}
+            totalPages={book.total_pages || 0}
+          />
+
+          <HighlightsSection
+            highlights={highlights || []}
+            onDeleteHighlight={(hid) => deleteHighlightMutation.mutate(hid)}
+          />
         </div>
 
-        {/* Description + TOC */}
-        <BookInfoTabs description={book.description} tocData={book.toc} />
-
-        {/* Highlights */}
-        <HighlightsSection
-          highlights={highlights || []}
-          onDeleteHighlight={(hid) => deleteHighlightMutation.mutate(hid)}
-        />
-
-        {/* Reading History */}
-        <ReadingHistory
-          startedAt={(book as any).started_at}
-          lastReadAt={(book as any).last_read_at}
-          currentPage={book.current_page || 0}
-          totalPages={book.total_pages || 0}
-        />
-
-        {/* Modals */}
         <BookDetailModals
           book={book}
           showDeleteDialog={showDeleteDialog}

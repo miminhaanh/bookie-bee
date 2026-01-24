@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatViDate } from "./utils";
 
 interface ReadingHistoryProps {
@@ -14,39 +13,36 @@ export function ReadingHistory({
   currentPage,
   totalPages,
 }: ReadingHistoryProps) {
-  // Ước tính thời gian còn lại (tốc độ 250 từ/phút, mỗi trang ~250 từ → 1 phút/trang)
-  const remainingPages = totalPages > 0 ? totalPages - currentPage : 0;
-  const estimatedMinutes = remainingPages;
+  const remainingPages = totalPages > 0 ? Math.max(0, totalPages - currentPage) : null;
+  const estimatedMinutes = remainingPages !== null ? remainingPages : 0;
   const hours = Math.floor(estimatedMinutes / 60);
   const mins = estimatedMinutes % 60;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Lịch sử đọc</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Bắt đầu</p>
-            <p className="text-base font-semibold">{formatViDate(startedAt)}</p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Gần nhất</p>
-            <p className="text-base font-semibold">{formatViDate(lastReadAt)}</p>
-          </div>
-
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">Ước tính còn</p>
-            <p className="text-base font-semibold">
-              {hours > 0 && `${hours}h `}
-              {mins > 0 && `${mins}phút`}
-              {remainingPages <= 0 && "Đã hoàn thành"}
-            </p>
-          </div>
+    <section className="space-y-4 border-b border-[#E5E5E5] pb-10">
+      <h3 className="text-base font-semibold text-[#111]">Lịch sử đọc</h3>
+      <div className="grid gap-6 text-sm text-[#666] sm:grid-cols-3">
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-[#999]">Bắt đầu</p>
+          <p className="text-lg font-semibold text-[#111]">{formatViDate(startedAt)}</p>
         </div>
-      </CardContent>
-    </Card>
+
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-[#999]">Gần nhất</p>
+          <p className="text-lg font-semibold text-[#111]">{formatViDate(lastReadAt)}</p>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-[#999]">Ước tính còn lại</p>
+          <p className="text-lg font-semibold text-[#111]">
+            {remainingPages === null
+              ? "-"
+              : remainingPages <= 0
+                ? "Đã hoàn thành"
+                : `${hours > 0 ? `${hours}h ` : ""}${mins > 0 ? `${mins}phút` : ""}`}
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

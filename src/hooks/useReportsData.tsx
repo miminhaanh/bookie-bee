@@ -208,6 +208,38 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
         }
       }
 
+      const { data: missionRows, error: missionsError } = await supabase
+        .from("user_missions")
+        .select(
+          "id, mission_type, description, target_value, current_progress, reward_xp, is_completed"
+        )
+        .eq("user_id", user.id)
+        .order("mission_type", { ascending: true });
+
+      if (missionsError) {
+        console.warn("Reports missions fetch warning:", missionsError.message);
+      }
+
+      const missions = (missionRows ?? []).map((mission) => {
+        const missionTypeRaw = typeof mission.mission_type === "string" ? mission.mission_type : "daily";
+        const missionType = ["daily", "monthly", "streak"].includes(missionTypeRaw)
+          ? (missionTypeRaw as ReportsData["missions"][number]["type"])
+          : "daily";
+
+        const missionAny = mission as { is_claimed?: boolean | null };
+
+        return {
+          id: String(mission.id),
+          description: safeString(mission.description, ""),
+          target: Math.max(1, typeof mission.target_value === "number" ? mission.target_value : 1),
+          progress: Math.max(0, typeof mission.current_progress === "number" ? mission.current_progress : 0),
+          xpReward: Math.max(0, typeof mission.reward_xp === "number" ? mission.reward_xp : 0),
+          isCompleted: Boolean(mission.is_completed),
+          isClaimed: Boolean(missionAny?.is_claimed),
+          type: missionType,
+        };
+      });
+
       // Removed highlights query for performance optimization
 
       // Removed favorite book calculation for performance optimization
@@ -259,7 +291,7 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
           counts: {},
           total: 0
         },
-        missions: [], // Empty - removed for performance
+        missions,
         streak: currentStreak,
       };
     },

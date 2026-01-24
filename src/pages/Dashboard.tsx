@@ -9,17 +9,10 @@ import { BookShelf } from "@/components/dashboard/BookShelf";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import type { BookStatus } from "@/hooks/useBooks";
 import { useReportsData } from "@/hooks/useReportsData";
+import { UserTour } from "@/components/common/UserTour";
 
 interface BookWithProgress {
   id: string;
@@ -49,6 +42,7 @@ const Dashboard = () => {
 
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [welcomeBannerSeen, setWelcomeBannerSeen] = useState(false);
+  const [runTour, setRunTour] = useState(false);
 
   /* ===================== AUTH GUARD ===================== */
   useEffect(() => {
@@ -123,12 +117,6 @@ const Dashboard = () => {
     );
   };
 
-  // Show onboarding only if:
-  // 1. User has NOT completed onboarding (first time)
-  // 2. User has NO books yet
-  const shouldShowOnboarding =
-    !onboardingCompleted && !hasAnyBooks;
-
   // Show welcome banner only if:
   // 1. Onboarding was completed
   // 2. Banner hasn't been seen yet
@@ -141,17 +129,6 @@ const Dashboard = () => {
     !searchQuery;
 
   /* ===================== HANDLERS ===================== */
-  const completeOnboarding = async () => {
-    if (!user) return;
-    await (supabase as any)
-      .from("profiles")
-      .update({ onboarding_completed: true })
-      .eq("user_id", user.id);
-
-    setOnboardingCompleted(true);
-    navigate("/add-book");
-  };
-
   const handleWelcomeBannerClick = async () => {
     if (!user) return;
     await (supabase as any)
@@ -163,37 +140,29 @@ const Dashboard = () => {
     navigate("/add-book");
   };
 
+  useEffect(() => {
+    if (!user || loading) return;
+    if (!onboardingCompleted && !hasAnyBooks) {
+      setRunTour(true);
+    }
+  }, [user, loading, onboardingCompleted, hasAnyBooks]);
+
+  const handleTourFinish = async () => {
+    setRunTour(false);
+    if (!user) return;
+    await (supabase as any)
+      .from("profiles")
+      .update({ onboarding_completed: true })
+      .eq("user_id", user.id);
+    setOnboardingCompleted(true);
+  };
+
   /* ===================== RENDER ===================== */
   return (
     <SidebarProvider>
+      <UserTour run={runTour} onFinish={handleTourFinish} />
       <div className="min-h-screen flex w-full">
         <AppSidebar />
-
-        {/* ========== ONBOARDING DIALOG (FIRST LOGIN ONLY) ========== */}
-        {shouldShowOnboarding && (
-          <Dialog open>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-2xl flex gap-2">
-                  🎉 Chào mừng đến với Bookie Bee!
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-4 py-4">
-                <p>📚 Thêm sách của bạn</p>
-                <p>📖 Bắt đầu đọc – tiến độ tự động lưu</p>
-                <p>✨ Highlight & ghi chú</p>
-              </div>
-
-              <DialogFooter>
-                <Button onClick={completeOnboarding} className="w-full gap-2">
-                  <Plus className="w-4 h-4" />
-                  Bắt đầu thêm sách
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
 
         {/* ===================== MAIN ===================== */}
         <main className="flex-1 flex flex-col min-h-screen">
@@ -207,6 +176,7 @@ const Dashboard = () => {
               <section className="mb-8 grid lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
                   <ProfileCard
+                    className="profile-card-tour"
                     level={reportData?.level.currentLevel ?? 1}
                     xp={reportData?.level.currentXP ?? 0}
                     xpToNextLevel={

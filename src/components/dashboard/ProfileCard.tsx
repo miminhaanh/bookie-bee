@@ -1,6 +1,8 @@
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import { getLevelTitle } from "@/lib/constants";
 
 // Generate initials from name
 const getInitials = (name: string) => {
@@ -32,20 +34,8 @@ interface ProfileCardProps {
   xpToNextLevel?: number;
   avatarUrl?: string | null;
   displayName?: string | null;
+  className?: string;
 }
-
-const LEVEL_TITLES: Record<number, { title: string; icon: string }> = {
-  1: { title: "Ấu trùng", icon: "🐛" },
-  2: { title: "Ấu trùng", icon: "🐛" },
-  3: { title: "Ấu trùng", icon: "🐛" },
-  4: { title: "Ấu trùng", icon: "🐛" },
-  5: { title: "Ong Thợ", icon: "🐝" },
-  6: { title: "Ong Thợ", icon: "🐝" },
-  7: { title: "Ong Thợ", icon: "🐝" },
-  8: { title: "Ong Thợ", icon: "🐝" },
-  9: { title: "Ong Thợ", icon: "🐝" },
-  10: { title: "Ong Trinh Sát", icon: "🦋" },
-};
 
 export function ProfileCard({ 
   level = 5, 
@@ -53,6 +43,7 @@ export function ProfileCard({
   xpToNextLevel = 500,
   avatarUrl,
   displayName,
+  className,
 }: ProfileCardProps) {
   const { user } = useAuth();
 
@@ -62,11 +53,13 @@ export function ProfileCard({
   const initials = getInitials(resolvedDisplayName);
   const avatarColorClass = getAvatarColor(userEmail);
   
-  const levelInfo = LEVEL_TITLES[level] || LEVEL_TITLES[5];
-  const xpProgress = (xp / xpToNextLevel) * 100;
+  const normalizedLevel = Number.isFinite(level) ? level : 1;
+  const levelInfo = getLevelTitle(normalizedLevel);
+  const xpProgress = xpToNextLevel > 0 ? Math.min(100, (xp / xpToNextLevel) * 100) : 0;
+  const xpRemaining = Math.max(0, xpToNextLevel - xp);
 
   return (
-    <div className="glass-card rounded-3xl p-6 relative overflow-hidden">
+    <div className={cn("glass-card rounded-3xl p-6 relative overflow-hidden", className)}>
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-warm-pink/20 to-transparent rounded-full blur-2xl" />
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-sage/20 to-transparent rounded-full blur-2xl" />
@@ -84,7 +77,7 @@ export function ProfileCard({
           </Avatar>
           {/* Level badge */}
           <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gradient-to-br from-warm-pink to-coral flex items-center justify-center text-xs font-bold text-primary-foreground shadow-md">
-            {level}
+            {normalizedLevel}
           </div>
         </div>
 
@@ -96,7 +89,7 @@ export function ProfileCard({
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span className="text-lg">{levelInfo.icon}</span>
             <span className="font-medium">{levelInfo.title}</span>
-            <span className="text-warm-pink font-semibold">Lv.{level}</span>
+            <span className="text-warm-pink font-semibold">Lv.{normalizedLevel}</span>
           </div>
         </div>
       </div>
@@ -121,7 +114,7 @@ export function ProfileCard({
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Còn {xpToNextLevel - xp} XP để lên level tiếp theo
+          Còn {xpRemaining} XP để lên level tiếp theo
         </p>
       </div>
     </div>

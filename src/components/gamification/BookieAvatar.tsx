@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { getLevelTitle } from "@/lib/constants";
 
 interface BookieAvatarProps {
     level: number;
@@ -30,15 +31,23 @@ export const BookieAvatar = ({ level, className, size = "md", showGreeting = tru
     const [greeting, setGreeting] = useState("");
     const [isHovered, setIsHovered] = useState(false);
 
-    // Determine Bee Stage
-    const getBeeStage = () => {
-        if (level === 1) return { icon: "🐝", title: "Ong Non", color: "text-amber-300" }; // Pale Yellow
-        if (level === 2) return { icon: "🦩", title: "Hồng Hạc", color: "text-orange-400" }; // Peach/Orange
-        if (level === 3) return { icon: "🕊️", title: "Bồ Câu Hòa Bình", color: "text-amber-600" }; // Amber/Diligent
-        return { icon: "🦢", title: "Thiên Nga Trắng", color: "text-red-500" }; // Royal
+    const resolveStageKey = () => {
+        if (level <= 1) return 1;
+        if (level <= 3) return 2;
+        if (level <= 5) return 3;
+        return 4;
     };
 
-    const stage = getBeeStage();
+    const stageKey = resolveStageKey();
+    const stageInfo = getLevelTitle(level);
+    const stageColors: Record<number, string> = {
+        1: "text-amber-300",
+        2: "text-orange-400",
+        3: "text-amber-600",
+        4: "text-rose-500",
+    };
+
+    const stageColor = stageColors[stageKey] ?? "text-amber-400";
 
     const sizeClasses = {
         sm: "text-2xl",
@@ -77,14 +86,14 @@ export const BookieAvatar = ({ level, className, size = "md", showGreeting = tru
 
             {/* Sleeping Zzz Animation */}
             {isSleeping && (
-                <motion.div
-                    className="absolute -top-8 right-0 text-xl font-bold text-sky-400 z-20"
-                    initial={{ opacity: 0, scale: 0.5, x: 0, y: 0 }}
-                    animate={{ opacity: [0, 1, 0], scale: [0.5, 1.2, 1.5], x: [0, 15, 30], y: [0, -20, -40] }}
-                    transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                <motion.span
+                    className="absolute -top-4 right-2 text-sm font-semibold text-sky-400 z-20"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: [0, 1, 0], y: [-4, -10, -16] }}
+                    transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
                 >
-                    Zzz...
-                </motion.div>
+                    Zz
+                </motion.span>
             )}
 
             {/* Bee Avatar */}
@@ -108,14 +117,14 @@ export const BookieAvatar = ({ level, className, size = "md", showGreeting = tru
                     },
                     scale: { duration: 0.3 }
                 }}
-                className={cn("cursor-pointer select-none filter drop-shadow-xl", sizeClasses[size], stage.color)}
+                className={cn("cursor-pointer select-none filter drop-shadow-xl", sizeClasses[size], stageColor)}
             >
-                {stage.icon}
+                {stageInfo.icon}
             </motion.div>
 
             {/* Level Badge (Optional, small) */}
             <div className="mt-2 text-xs font-bold uppercase tracking-wider text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                Lv.{level} {stage.title}
+                Lv.{level} {stageInfo.title}
             </div>
         </div>
     );

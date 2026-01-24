@@ -105,6 +105,8 @@ const ReaderContainer = () => {
     deleteHighlightFromDb,
     saveTranslateHistory,
     totalPages,
+    isBookLoading,
+    bookLoadError,
   } = core;
 
   const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
@@ -270,10 +272,21 @@ const ReaderContainer = () => {
     [core, setHasVisitedPage, setCurrentPage]
   );
 
-  if (authLoading || !book) {
+  if (authLoading || isBookLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-lg font-semibold text-muted-foreground">
+          {bookLoadError ?? "Không tìm thấy thông tin sách để mở trình đọc."}
+        </p>
+        <Button onClick={() => navigate("/dashboard")}>Quay lại Dashboard</Button>
       </div>
     );
   }

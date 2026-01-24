@@ -81,11 +81,3 @@ export const GENRES = [
   "Văn học", "Self-help", "Kinh doanh", "Khoa học",
   "Lịch sử", "Tâm lý", "Truyện ngắn", "Tiểu thuyết",
 ] as const;
-
-export type BookPrivacy = "private" | "link" | "public";
-
-export const PRIVACY_OPTIONS: Array<{ value: BookPrivacy; label: string; desc: string }> = [
-  { value: "private", label: "Riêng tư", desc: "Chỉ mình bạn xem được" },
-  { value: "link", label: "Chia sẻ link", desc: "Ai có link đều xem được" },
-  { value: "public", label: "Công khai", desc: "Hiển thị trong cộng đồng" },
-];

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Upload as UploadIcon,
@@ -80,6 +80,8 @@ const Upload = () => {
     description: "",
     author: "",
   });
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
 
   const { user, loading: authLoading } = useAuth();
   const { addBook, updateBook } = useBooks();
@@ -94,6 +96,14 @@ const Upload = () => {
   };
 
   const sanitation = (name: string) => name.replace(/[^a-zA-Z0-9.-]/g, "-").toLowerCase();
+
+  useEffect(() => {
+    return () => {
+      if (coverPreview) {
+        URL.revokeObjectURL(coverPreview);
+      }
+    };
+  }, [coverPreview]);
 
   const handleFileSelect = (file: File) => {
     if (!file) return;
@@ -110,6 +120,29 @@ const Upload = () => {
     setFormData(prev => ({ ...prev, title: file.name.replace(/\.(pdf|epub|txt)$/i, "").replace(/_/g, " ") }));
   };
 
+  const handleCoverSelect = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "File không hợp lệ", description: "Vui lòng chọn ảnh PNG hoặc JPG", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Ảnh quá lớn", description: "Giới hạn 5MB", variant: "destructive" });
+      return;
+    }
+    setCoverFile(file);
+    setCoverPreview(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  };
+
+  const clearCover = () => {
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCoverPreview(null);
+    setCoverFile(null);
+  };
+
   const handleUploadBook = async () => {
     if (!uploadedFile || !user) return;
     const format = getFileFormat(uploadedFile.name);
@@ -122,6 +155,18 @@ const Upload = () => {
       const pdfTotalPages = format === "pdf" ? (await getDocument({ data: await uploadedFile.arrayBuffer() }).promise).numPages : null;
       setUploadProgress({ stage: 'processing', percent: 30, message: 'Xử lý dữ liệu...' });
       const extractedToc = format === "pdf" ? await extractPdfToc(uploadedFile) : null;
+
+      let coverUrlFromUpload: string | null = null;
+      if (coverFile) {
+        setUploadProgress({ stage: 'uploading', percent: 40, message: 'Đang tải ảnh bìa...' });
+        const coverPath = `${user.id}/${Date.now()}_cover_${sanitation(coverFile.name)}`;
+        const { error: coverUploadError } = await supabase.storage
+          .from(COVERS_BUCKET)
+          .upload(coverPath, coverFile, { contentType: coverFile.type || "image/jpeg" });
+        if (coverUploadError) throw new Error(coverUploadError.message);
+        const { data } = supabase.storage.from(COVERS_BUCKET).getPublicUrl(coverPath);
+        coverUrlFromUpload = data.publicUrl;
+      }
 
       const cleanName = sanitation(uploadedFile.name);
       const filePath = `${user.id}/${Date.now()}-${cleanName}`;
@@ -136,7 +181,7 @@ const Upload = () => {
         title: formData.title,
         author: formData.author || null,
         description: formData.description || null,
-        cover_url: null,
+        cover_url: coverUrlFromUpload,
         genre: selectedGenres.join(", ") || null, // Join multiple genres
         format,
         file_url: filePath,
@@ -151,7 +196,7 @@ const Upload = () => {
         open_library_key: null,
       });
 
-      if (format === "pdf") {
+      if (!coverUrlFromUpload && format === "pdf") {
         setUploadProgress({ stage: 'generating-cover', percent: 90, message: 'Tạo bìa sách...' });
         try {
           const cover = await renderPdfFirstPageToCoverBlob(uploadedFile);
@@ -164,6 +209,7 @@ const Upload = () => {
 
       setUploadProgress({ stage: 'done', percent: 100, message: 'Hoàn tất!' });
       toast({ title: "Thành công", description: `Đã thêm sách "${formData.title}"` });
+      clearCover();
       setTimeout(() => navigate("/"), 800);
 
     } catch (err: any) {
@@ -237,6 +283,43 @@ const Upload = () => {
                   <p className="text-[10px] text-slate-400 uppercase tracking-widest pt-4">Max 50MB • PDF, EPUB</p>
                 </div>
               )}
+            </div>
+
+            <div className="space-y-3">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1">Ảnh bìa</Label>
+              <div className="flex items-center gap-4">
+                <div className="h-44 w-32 overflow-hidden rounded border border-slate-200 bg-white shadow-[0_10px_25px_rgba(0,0,0,0.08)]">
+                  {coverPreview ? (
+                    <img src={coverPreview} alt="Xem trước bìa" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-xs uppercase tracking-widest text-slate-400">
+                      Không có ảnh
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Button
+                    variant="outline"
+                    className="rounded-lg border-slate-200 px-4"
+                    onClick={() => document.getElementById("cover-upload")?.click()}
+                  >
+                    Chọn ảnh
+                  </Button>
+                  {coverFile && (
+                    <Button variant="ghost" className="px-0 text-rose-500" onClick={clearCover}>
+                      Gỡ ảnh
+                    </Button>
+                  )}
+                  <p className="text-xs text-slate-500">PNG, JPG · tối đa 5MB</p>
+                </div>
+              </div>
+              <input
+                id="cover-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handleCoverSelect(e.target.files?.[0] || null)}
+              />
             </div>
 
             {/* Progress Bar */}

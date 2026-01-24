@@ -8,6 +8,7 @@ import { zoomPlugin } from "@react-pdf-viewer/zoom";
 import { highlightPlugin, type HighlightArea } from "@react-pdf-viewer/highlight";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks } from "@/hooks/useBooks";
+import type { Book } from "@/hooks/useBooks";
 import { useProfile } from "@/hooks/useProfile";
 import { useToast } from "@/hooks/use-toast";
 import { useReadingSession } from "@/hooks/useReadingSession";
@@ -43,7 +44,12 @@ export const useReaderCore = (bookId: string) => {
   const { endSession } = useReadingSession(bookId);
 
   // Book data
-  const book = books.find((b) => b.id === bookId);
+  const [bookFallback, setBookFallback] = useState<Book | null>(null);
+  const [isBookLoading, setIsBookLoading] = useState(false);
+  const [bookLoadError, setBookLoadError] = useState<string | null>(null);
+
+  const bookFromQuery = books.find((b) => b.id === bookId);
+  const book = bookFromQuery ?? bookFallback ?? null;
   const totalPages = typeof book?.total_pages === "number" && book.total_pages > 0 ? book.total_pages : null;
   const fileUrl = book?.file_url || "";
 
@@ -111,6 +117,50 @@ export const useReaderCore = (bookId: string) => {
   const bookmarkPluginInstance = bookmarkPlugin();
   const pageNavigationPluginInstance = pageNavigationPlugin();
   const zoomPluginInstance = zoomPlugin();
+
+  useEffect(() => {
+    if (!user?.id || !bookId) return;
+
+    if (bookFromQuery) {
+      if (bookFallback) setBookFallback(null);
+      if (bookLoadError) setBookLoadError(null);
+      if (isBookLoading) setIsBookLoading(false);
+      return;
+    }
+
+    if (bookFallback || isBookLoading || bookLoadError) return;
+
+    let cancelled = false;
+    const fetchBook = async () => {
+      setIsBookLoading(true);
+      setBookLoadError(null);
+      const { data, error } = await supabase
+        .from("books")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("id", bookId)
+        .maybeSingle();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        setBookLoadError(error.message);
+      } else if (data) {
+        setBookFallback(data as Book);
+      } else {
+        setBookLoadError("Không tìm thấy sách của bạn.");
+      }
+      setIsBookLoading(false);
+    };
+
+    fetchBook();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, bookId, bookFromQuery, bookFallback, isBookLoading, bookLoadError]);
 
   // Load settings from localStorage
   useEffect(() => {
@@ -354,5 +404,9 @@ export const useReaderCore = (bookId: string) => {
     fetchPageHighlights,
     fetchAllBookHighlights,
     deleteHighlightFromDb,
+
+    // Book loading helpers
+    isBookLoading,
+    bookLoadError,
   };
 };

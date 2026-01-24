@@ -3,13 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BookieAvatar } from "./BookieAvatar";
-import { Sparkles, ArrowUp } from "lucide-react";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Sparkles } from "lucide-react";
+import { getLevelTitle } from "@/lib/constants";
 
 interface HoneyJarProps {
     currentXP: number;
@@ -32,7 +27,9 @@ export const HoneyJarLevel = ({
     const [showLevelUp, setShowLevelUp] = useState(false);
 
     // Calculate fill percentage (clamp between 5% and 95% for visual aesthetics)
-    const fillPercentage = Math.min(Math.max((currentXP / maxXP) * 100, 5), 95);
+    const safeMaxXp = maxXP > 0 ? maxXP : 1;
+    const fillPercentage = Math.min(Math.max((currentXP / safeMaxXp) * 100, 5), 95);
+    const levelInfo = getLevelTitle(level);
 
     const handleCollect = () => {
         setIsCollecting(true);
@@ -51,13 +48,6 @@ export const HoneyJarLevel = ({
         return "from-red-400 to-amber-700";                     // Ong Chúa: Mật rừng đậm
     };
 
-    const getBeeTitle = () => {
-        if (level === 1) return "Ong Non";
-        if (level === 2) return "Ong Thợ";
-        if (level === 3) return "Ong Chăm";
-        return "Ong Chúa";
-    };
-
     const isSleeping = streak === 0;
 
     return (
@@ -72,8 +62,9 @@ export const HoneyJarLevel = ({
             {/* Header Info */}
             <div className="flex flex-col items-center gap-1 mb-8 z-20">
                 <div className="flex items-center gap-3 bg-white/80 backdrop-blur-md px-4 py-1.5 rounded-full shadow-sm border border-white/40">
-                    <span className="text-xs font-bold tracking-wider text-slate-500 uppercase">
-                        LV.{level} {getBeeTitle()}
+                    <span className="text-xs font-bold tracking-wider text-slate-500 uppercase flex items-center gap-1">
+                        <span>{levelInfo.icon}</span>
+                        <span>LV.{level} {levelInfo.title}</span>
                     </span>
                     <div className="w-1 h-3 bg-slate-200 rounded-full" />
                     <span className="text-xs font-bold text-amber-600">
@@ -242,7 +233,7 @@ export const HoneyJarLevel = ({
                     />
                 </div>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                    Cần thêm <span className="text-amber-600 font-bold">{maxXP - currentXP} XP</span> để thăng cấp!
+                    Cần thêm <span className="text-amber-600 font-bold">{Math.max(0, safeMaxXp - currentXP)} XP</span> để thăng cấp!
                 </p>
             </div>
 
@@ -256,7 +247,7 @@ export const HoneyJarLevel = ({
                         className="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center rounded-[40px]"
                     >
                         <h3 className="text-2xl font-bold text-amber-600 mb-2">Chúc mừng! 🎉</h3>
-                        <p className="text-slate-600">Bạn đã thăng cấp thành {getBeeTitle()}</p>
+                        <p className="text-slate-600">Bạn đã thăng cấp thành {levelInfo.title}</p>
                     </motion.div>
                 )}
             </AnimatePresence>

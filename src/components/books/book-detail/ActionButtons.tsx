@@ -37,10 +37,10 @@ export function ActionButtons({
   };
 
   return (
-    <section className="flex flex-wrap items-center gap-3 border-b border-[#E5E5E5] pb-8">
+    <section className="flex flex-wrap items-center gap-3 border-b border-[#F0E6DB] pb-9">
       <Button
         onClick={onStartReading}
-        className="gap-2 rounded-[8px] border border-transparent bg-[#F25C3D] px-6 py-3 text-base font-semibold text-white shadow-none hover:bg-[#DD4F33]"
+        className="gap-2 rounded-[12px] border border-transparent bg-[#F26B3A] px-7 py-3 text-base font-semibold text-white shadow-none transition-colors hover:bg-[#E05B2D]"
       >
         <Play className="h-5 w-5" />
         {book.current_page && book.current_page > 0 ? "Đọc tiếp" : "Bắt đầu đọc"}
@@ -49,7 +49,7 @@ export function ActionButtons({
       <Button
         onClick={handleShare}
         variant="ghost"
-        className="gap-2 rounded-[8px] border border-[#E5E5E5] bg-transparent px-5 py-3 text-sm font-medium text-[#111] hover:bg-[#F7F7F7]"
+        className="gap-2 rounded-[10px] border border-[#EEDAC6] bg-transparent px-5 py-3 text-sm font-medium text-[#3B2A1E] hover:bg-[#FFF3E8]"
       >
         <Share2 className="h-5 w-5" />
         Chia sẻ
@@ -59,7 +59,7 @@ export function ActionButtons({
         <Button
           onClick={onEditClick}
           variant="ghost"
-          className="gap-2 rounded-[8px] border border-[#E5E5E5] bg-transparent px-5 py-3 text-sm font-medium text-[#111] hover:bg-[#F7F7F7]"
+          className="gap-2 rounded-[10px] border border-[#EEDAC6] bg-transparent px-5 py-3 text-sm font-medium text-[#3B2A1E] hover:bg-[#FFF3E8]"
         >
           <Edit className="h-4 w-4" />
           Sửa
@@ -68,7 +68,7 @@ export function ActionButtons({
 
       <Button
         variant="ghost"
-        className="gap-2 rounded-[8px] border border-[#E5E5E5] bg-transparent px-5 py-3 text-sm font-medium text-[#111] hover:bg-[#F7F7F7]"
+        className="gap-2 rounded-[10px] border border-[#EEDAC6] bg-transparent px-5 py-3 text-sm font-medium text-[#3B2A1E] hover:bg-[#FFF3E8]"
       >
         <Flag className="h-4 w-4" />
         Báo cáo

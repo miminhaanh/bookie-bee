@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GENRES, PRIVACY_OPTIONS, type BookPrivacy } from "./utils";
+import { GENRES } from "./utils";
 import type { Book } from "@/hooks/useBooks";
 
 interface BookDetailModalsProps {
@@ -43,7 +43,6 @@ interface BookDetailModalsProps {
     author: string;
     description: string;
     genre: string;
-    privacy: BookPrivacy;
   }) => void;
 }
 
@@ -60,17 +59,12 @@ export function BookDetailModals({
   const [editAuthor, setEditAuthor] = useState(book.author || "");
   const [editDesc, setEditDesc] = useState(book.description || "");
   const [editGenre, setEditGenre] = useState(book.genre || "");
-  const [editPrivacy, setEditPrivacy] = useState<BookPrivacy>(
-    ((book as any).privacy as BookPrivacy) || "private"
-  );
-
   const handleSave = () => {
     onSaveEdit({
       title: editTitle,
       author: editAuthor,
       description: editDesc,
       genre: editGenre,
-      privacy: editPrivacy,
     });
   };
 
@@ -143,28 +137,6 @@ export function BookDetailModals({
                   {GENRES.map((g) => (
                     <SelectItem key={g} value={g}>
                       {g}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="edit-privacy">Quyền riêng tư</Label>
-              <Select
-                value={editPrivacy}
-                onValueChange={(v) => setEditPrivacy(v as BookPrivacy)}
-              >
-                <SelectTrigger id="edit-privacy">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRIVACY_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <div>
-                        <div className="font-medium">{opt.label}</div>
-                        <div className="text-xs text-muted-foreground">{opt.desc}</div>
-                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

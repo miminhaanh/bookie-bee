@@ -1,3 +1,4 @@
+import { Sparkles, BookOpen } from "lucide-react";
 import type { Book } from "@/hooks/useBooks";
 
 interface BookHeroProps {
@@ -9,9 +10,9 @@ export function BookHero({ book }: BookHeroProps) {
   const estimatedHours = totalPages ? Math.max(1, Math.round(totalPages / 60)) : null;
 
   return (
-    <section className="grid gap-8 border-b border-[#E5E5E5] pb-10 md:grid-cols-[220px,1fr]">
-      <div className="w-full max-w-[220px]">
-        <div className="relative aspect-[2/3] overflow-hidden rounded-[4px] border border-[#E5E5E5] bg-white shadow-[0_18px_40px_rgba(0,0,0,0.08)]">
+    <section className="grid gap-10 border-b border-[#F0E6DB] pb-12 md:grid-cols-[230px,1fr]">
+      <div className="w-full max-w-[230px]">
+        <div className="relative aspect-[2/3] overflow-hidden rounded-[10px] border border-[#F1E4D4] bg-[#FEF8F0] shadow-[0_12px_30px_rgba(107,70,35,0.08)]">
           {book.cover_url ? (
             <img
               src={book.cover_url}
@@ -19,8 +20,12 @@ export function BookHero({ book }: BookHeroProps) {
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-sm uppercase tracking-wider text-[#999]">
-              Không có ảnh
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 text-sm uppercase tracking-[0.3em] text-[#B08863]">
+              <div className="flex items-center gap-2 text-[#D79C60]">
+                <Sparkles className="h-5 w-5" strokeWidth={1.5} />
+                <BookOpen className="h-5 w-5" strokeWidth={1.5} />
+              </div>
+              <span>Chưa có ảnh bìa</span>
             </div>
           )}
         </div>
@@ -28,24 +33,24 @@ export function BookHero({ book }: BookHeroProps) {
 
       <div className="flex flex-col gap-6">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-[#666]">Sách</p>
-          <h1 className="mt-2 text-[32px] font-semibold leading-[1.2] text-[#111]">
+          <p className="text-[11px] uppercase tracking-[0.35em] text-[#B37A5B]">Sách</p>
+          <h1 className="mt-3 text-[30px] font-semibold leading-[1.25] text-[#2D1F16]">
             {book.title}
           </h1>
-          <p className="text-base text-[#666]">{book.author || "Tác giả ẩn danh"}</p>
+          <p className="text-base text-[#7B6658]">{book.author || "Tác giả ẩn danh"}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-sm text-[#666]">
-          {totalPages > 0 && <span className="font-semibold text-[#111]">{totalPages} trang</span>}
+        <div className="flex flex-wrap items-center gap-3 text-sm text-[#806E64]">
+          {totalPages > 0 && <span className="font-medium text-[#2D1F16]">{totalPages} trang</span>}
           {totalPages > 0 && estimatedHours && (
             <>
-              <span className="text-[#C7C7C7]">•</span>
+              <span className="text-[#D8C7B4]">•</span>
               <span>~{estimatedHours} giờ đọc</span>
             </>
           )}
           {book.genre && (
             <>
-              <span className="text-[#C7C7C7]">•</span>
+              <span className="text-[#D8C7B4]">•</span>
               <span>{book.genre}</span>
             </>
           )}

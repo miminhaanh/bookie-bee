@@ -7,7 +7,8 @@ import {
   Settings,
   HelpCircle,
   LogOut,
-  Library
+  Library,
+  Plus
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -74,6 +75,18 @@ export function AppSidebar() {
         {/* Main Navigation */}
         <SidebarGroup>
           <SidebarGroupContent>
+            <SidebarMenu className="mb-4">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => navigate("/add-book")}
+                  className="sidebar-add-book w-full justify-start gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-warm-pink to-coral text-white shadow-lg hover:shadow-xl transition-all"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Thêm sách</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+
             <SidebarMenu>
               {mainNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
@@ -81,6 +94,7 @@ export function AppSidebar() {
                     onClick={() => navigate(item.path)}
                     className={cn(
                       "w-full justify-start gap-3 px-4 py-3 rounded-xl transition-all duration-200",
+                      item.path === "/reports" && "nav-reports",
                       "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       isActive(item.path) && "bg-gradient-to-r from-warm-pink/20 to-coral/10 text-warm-pink font-semibold shadow-sm"
                     )}

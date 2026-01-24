@@ -62,6 +62,7 @@
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.71.1",
     "react-is": "^19.2.3",
+    "react-joyride": "^2.9.3",
     "react-pdf": "^10.3.0",
     "react-pdf-highlighter": "^8.0.0-rc.0",
     "react-resizable-panels": "^4.4.2",

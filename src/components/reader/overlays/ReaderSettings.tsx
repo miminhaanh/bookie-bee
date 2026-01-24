@@ -9,7 +9,6 @@ import type { ReaderTheme } from "../utils/readerUtils";
 import { themeStyles } from "../utils/readerUtils";
 
 interface ReaderSettingsProps {
-  isPdf: boolean;
   scrollMode: ScrollMode;
   onScrollModeChange: (mode: ScrollMode) => void;
   theme: ReaderTheme;
@@ -23,7 +22,6 @@ interface ReaderSettingsProps {
 }
 
 export const ReaderSettings = ({
-  isPdf,
   scrollMode,
   onScrollModeChange,
   theme,
@@ -53,38 +51,36 @@ export const ReaderSettings = ({
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {/* Reading mode (PDF only) */}
-          {isPdf && (
-            <div>
-              <Label className="text-sm font-medium">Chế độ đọc</Label>
-              <div className="mt-2 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => onScrollModeChange(ScrollMode.Vertical)}
-                  className={cn(
-                    "flex-1 rounded-lg border-2 p-3 text-sm transition-all",
-                    scrollMode === ScrollMode.Vertical
-                      ? "border-primary bg-primary/10"
-                      : "border-border"
-                  )}
-                >
-                  Cuộn dọc
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onScrollModeChange(ScrollMode.Horizontal)}
-                  className={cn(
-                    "flex-1 rounded-lg border-2 p-3 text-sm transition-all",
-                    scrollMode === ScrollMode.Horizontal
-                      ? "border-primary bg-primary/10"
-                      : "border-border"
-                  )}
-                >
-                  Lướt ngang
-                </button>
-              </div>
+          {/* Reading mode */}
+          <div>
+            <Label className="text-sm font-medium">Chế độ đọc</Label>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => onScrollModeChange(ScrollMode.Vertical)}
+                className={cn(
+                  "flex-1 rounded-lg border-2 p-3 text-sm transition-all",
+                  scrollMode === ScrollMode.Vertical
+                    ? "border-primary bg-primary/10"
+                    : "border-border"
+                )}
+              >
+                Cuộn dọc
+              </button>
+              <button
+                type="button"
+                onClick={() => onScrollModeChange(ScrollMode.Horizontal)}
+                className={cn(
+                  "flex-1 rounded-lg border-2 p-3 text-sm transition-all",
+                  scrollMode === ScrollMode.Horizontal
+                    ? "border-primary bg-primary/10"
+                    : "border-border"
+                )}
+              >
+                Lướt ngang
+              </button>
             </div>
-          )}
+          </div>
 
           {/* Theme */}
           <div>

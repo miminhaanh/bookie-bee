@@ -18,7 +18,6 @@ import { TextSelectionToolbar } from "@/components/books/HighlightSelectionToolb
 
 import { useReaderCore } from "./hooks/useReaderCore";
 import { PDFViewerContainer } from "./parts/PDFViewerContainer";
-import { EpubViewerContainer } from "./parts/EpubViewerContainer";
 import { ReaderTopBar } from "./parts/ReaderTopBar";
 import { ReaderBottomBar } from "./parts/ReaderBottomBar";
 import { TranslationDialog } from "./overlays/TranslationDialog";
@@ -35,7 +34,6 @@ const ReaderContainer = () => {
   const {
     book,
     fileUrl,
-    isPdf,
     numPages,
     pdfBlobUrl,
     setPdfBlobUrl,
@@ -114,6 +112,7 @@ const ReaderContainer = () => {
   const { Bookmarks } = bookmarkPluginInstance;
 
   const currentTheme = themeStyles[theme];
+  const isPdfFile = fileUrl.toLowerCase().endsWith(".pdf");
   const didJumpToQueryPageRef = useRef(false);
   const queryPageRef = useRef<number | null>(null);
 
@@ -291,6 +290,17 @@ const ReaderContainer = () => {
     );
   }
 
+  if (!isPdfFile) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-lg font-semibold text-muted-foreground">
+          Trình đọc Bookie Bee hiện chỉ hỗ trợ PDF. Vui lòng tải lại file PDF cho cuốn sách này.
+        </p>
+        <Button onClick={() => navigate(`/book/${id}`)}>Quay lại sách</Button>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -360,7 +370,6 @@ const ReaderContainer = () => {
       <TableOfContents
         isOpen={isTocOpen}
         onOpenChange={setIsTocOpen}
-        isPdf={isPdf}
         bookmarksComponent={<Bookmarks />}
       />
 
@@ -370,9 +379,7 @@ const ReaderContainer = () => {
         highlights={highlightsList}
         isLoading={isHighlightsLoading}
         deletingId={deletingHighlightId}
-        isPdf={isPdf}
         onJumpToPage={(pageNumber) => {
-          if (!isPdf) return;
           pageNavigationPluginInstance.jumpToPage(Math.max(0, pageNumber - 1));
           setCurrentPage(pageNumber);
           setHasVisitedPage(true);
@@ -416,7 +423,6 @@ const ReaderContainer = () => {
       />
 
       <ReaderSettings
-        isPdf={isPdf}
         scrollMode={scrollMode}
         theme={theme}
         fontFamily={fontFamily}
@@ -446,36 +452,24 @@ const ReaderContainer = () => {
       />
 
       {/* Viewer */}
-      {isPdf ? (
-        pdfBlobUrl ? (
-          <PDFViewerContainer
-            fileUrl={pdfBlobUrl}
-            plugins={[
-              highlightPluginInstance,
-              scrollModePluginInstance,
-              bookmarkPluginInstance,
-              pageNavigationPluginInstance,
-              zoomPluginInstance,
-            ]}
-            onDocumentLoad={handlePdfDocumentLoad}
-            onPageChange={handlePdfPageChange}
-            defaultScale={SpecialZoomLevel.PageWidth as unknown as number}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        )
-      ) : (
-        <EpubViewerContainer
-          fileUrl={fileUrl}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          fontSize={fontSize}
-          fontFamily={fontFamily}
-          lineHeight={lineHeight}
-          theme={currentTheme}
+      {pdfBlobUrl ? (
+        <PDFViewerContainer
+          fileUrl={pdfBlobUrl}
+          plugins={[
+            highlightPluginInstance,
+            scrollModePluginInstance,
+            bookmarkPluginInstance,
+            pageNavigationPluginInstance,
+            zoomPluginInstance,
+          ]}
+          onDocumentLoad={handlePdfDocumentLoad}
+          onPageChange={handlePdfPageChange}
+          defaultScale={SpecialZoomLevel.PageFit as unknown as number}
         />
+      ) : (
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
       )}
 
       {/* Bottom Bar */}
@@ -483,7 +477,6 @@ const ReaderContainer = () => {
         showUI={showUI}
         currentPage={currentPage}
         totalPages={totalPages}
-        isPdf={isPdf}
         scrollMode={scrollMode}
         numPages={numPages}
         currentPageInput={<CurrentPageInput />}
@@ -491,17 +484,8 @@ const ReaderContainer = () => {
         zoomInButton={<ZoomIn>{(props) => <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); props.onClick(); }}>➕</Button>}</ZoomIn>}
         zoomOutButton={<ZoomOut>{(props) => <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); props.onClick(); }}>➖</Button>}</ZoomOut>}
         currentScaleComponent={<CurrentScale>{(props) => <div className="text-xs">{Math.round(props.scale * 100)}%</div>}</CurrentScale>}
-        onPageChange={(v) => setCurrentPage(v)}
-        onPreviousPage={
-          isPdf
-            ? () => pageNavigationPluginInstance.jumpToPreviousPage()
-            : () => setCurrentPage((p) => Math.max(1, p - 1))
-        }
-        onNextPage={
-          isPdf
-            ? () => pageNavigationPluginInstance.jumpToNextPage()
-            : () => setCurrentPage((p) => Math.min(totalPages || p, p + 1))
-        }
+        onPreviousPage={() => pageNavigationPluginInstance.jumpToPreviousPage()}
+        onNextPage={() => pageNavigationPluginInstance.jumpToNextPage()}
       />
     </div>
   );

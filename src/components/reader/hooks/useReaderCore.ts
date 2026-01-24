@@ -63,13 +63,12 @@ export const useReaderCore = (bookId: string) => {
   // Page & Navigation
   const [currentPage, setCurrentPage] = useState(1);
   const [scrollMode, setScrollMode] = useState<ScrollMode>(ScrollMode.Vertical);
-  const [isPdf, setIsPdf] = useState(false);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [hasVisitedPage, setHasVisitedPage] = useState(false);
   
   // Reading progress
-  const denomForProgress = isPdf && numPages ? numPages : totalPages;
+  const denomForProgress = numPages ?? totalPages;
   const { hydratedPage, saveNow, isHydrated } = useSaveReadingProgress({
     bookId,
     enabled: !!user?.id && !!bookId,
@@ -179,12 +178,6 @@ export const useReaderCore = (bookId: string) => {
     if (savedLineHeight) setLineHeight(Number(savedLineHeight));
   }, []);
 
-  // Determine file type
-  useEffect(() => {
-    const ext = fileUrl.split(".").pop()?.toLowerCase();
-    setIsPdf(ext === "pdf");
-  }, [fileUrl]);
-
   // Load translate history
   useEffect(() => {
     if (!user?.id) return;
@@ -205,7 +198,7 @@ export const useReaderCore = (bookId: string) => {
 
   // Fetch page highlights
   useEffect(() => {
-    if (!user?.id || !bookId || !isPdf || !hasVisitedPage) return;
+    if (!user?.id || !bookId || !hasVisitedPage) return;
 
     let active = true;
     const run = async () => {
@@ -218,7 +211,7 @@ export const useReaderCore = (bookId: string) => {
     return () => {
       active = false;
     };
-  }, [user?.id, bookId, isPdf, hasVisitedPage, currentPage]);
+  }, [user?.id, bookId, hasVisitedPage, currentPage]);
 
   // Fetch all highlights when opening list
   useEffect(() => {
@@ -301,7 +294,6 @@ export const useReaderCore = (bookId: string) => {
     bookId,
     fileUrl,
     totalPages,
-    isPdf,
     numPages,
     pdfBlobUrl,
     setPdfBlobUrl,

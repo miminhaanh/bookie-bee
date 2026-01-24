@@ -1,14 +1,12 @@
 import { ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { ScrollMode } from "@react-pdf-viewer/core";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
 interface ReaderBottomBarProps {
   showUI: boolean;
   currentPage: number;
   totalPages: number | null;
-  isPdf: boolean;
   scrollMode: ScrollMode;
   numPages: number | null;
   currentPageInput: React.ReactNode;
@@ -16,7 +14,6 @@ interface ReaderBottomBarProps {
   zoomInButton: React.ReactNode;
   zoomOutButton: React.ReactNode;
   currentScaleComponent: React.ReactNode;
-  onPageChange: (page: number) => void;
   onPreviousPage?: () => void;
   onNextPage?: () => void;
 }
@@ -25,7 +22,6 @@ export const ReaderBottomBar = ({
   showUI,
   currentPage,
   totalPages,
-  isPdf,
   scrollMode,
   numPages,
   currentPageInput,
@@ -33,14 +29,11 @@ export const ReaderBottomBar = ({
   zoomInButton,
   zoomOutButton,
   currentScaleComponent,
-  onPageChange,
   onPreviousPage,
   onNextPage,
 }: ReaderBottomBarProps) => {
-  const denomForProgress = isPdf && numPages ? numPages : totalPages;
-  const progressPercent = denomForProgress
-    ? Math.round((currentPage / denomForProgress) * 100)
-    : 0;
+  const denomForProgress = numPages ?? totalPages ?? 1;
+  const progressPercent = Math.min(100, Math.max(0, Math.round((currentPage / denomForProgress) * 100)));
 
   return (
     <footer
@@ -55,117 +48,73 @@ export const ReaderBottomBar = ({
         <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
             Trang
-            {isPdf ? (
-              <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                {currentPageInput}
-                <span>/</span>
-                {numberOfPagesComponent}
-              </span>
-            ) : (
-              <span>
-                {currentPage}/{totalPages}
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              {currentPageInput}
+              <span>/</span>
+              {numberOfPagesComponent}
+            </span>
           </span>
           <span>{progressPercent}%</span>
         </div>
 
         {/* Navigation */}
         <div className="flex items-center gap-4">
-          {isPdf ? (
-            scrollMode === ScrollMode.Horizontal ? (
-              <div
-                className="flex w-full items-center justify-between"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Trang trước"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onPreviousPage?.();
-                  }}
-                  disabled={currentPage <= 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  {zoomOutButton}
-                  {currentScaleComponent}
-                  {zoomInButton}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="icon"
-                  aria-label="Trang sau"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onNextPage?.();
-                  }}
-                  disabled={!!numPages && currentPage >= numPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <div
-                className="flex w-full items-center justify-center"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  {zoomOutButton}
-                  <div
-                    className="flex h-9 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
-                    aria-label="Nhảy đến trang"
-                  >
-                    {currentPageInput}
-                    <span className="mx-1 text-muted-foreground">/</span>
-                    {numberOfPagesComponent}
-                  </div>
-                  {currentScaleComponent}
-                  {zoomInButton}
-                </div>
-              </div>
-            )
-          ) : (
-            <>
+          {scrollMode === ScrollMode.Horizontal ? (
+            <div
+              className="flex w-full items-center justify-between"
+              onClick={(e) => e.stopPropagation()}
+            >
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Trang trước"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPageChange(Math.max(1, currentPage - 1));
+                  onPreviousPage?.();
                 }}
                 disabled={currentPage <= 1}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
-              <Slider
-                value={[currentPage]}
-                onValueChange={([v]) => onPageChange(v)}
-                min={1}
-                max={totalPages || 1}
-                step={1}
-                className="flex-1"
-                onClick={(e) => e.stopPropagation()}
-              />
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                {zoomOutButton}
+                {currentScaleComponent}
+                {zoomInButton}
+              </div>
 
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Trang sau"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPageChange(Math.min(totalPages || 1, currentPage + 1));
+                  onNextPage?.();
                 }}
-                disabled={currentPage >= (totalPages || 1)}
+                disabled={!!numPages && currentPage >= numPages}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
-            </>
+            </div>
+          ) : (
+            <div
+              className="flex w-full items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                {zoomOutButton}
+                <div
+                  className="flex h-9 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
+                  aria-label="Nhảy đến trang"
+                >
+                  {currentPageInput}
+                  <span className="mx-1 text-muted-foreground">/</span>
+                  {numberOfPagesComponent}
+                </div>
+                {currentScaleComponent}
+                {zoomInButton}
+              </div>
+            </div>
           )}
         </div>
       </div>

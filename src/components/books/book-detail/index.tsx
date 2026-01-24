@@ -22,6 +22,7 @@ import { HighlightsSection } from "./HighlightsSection";
 import { ReadingHistory } from "./ReadingHistory";
 import { BookDetailModals } from "./BookDetailModals";
 import type { Book } from "@/hooks/useBooks";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function BookDetailContainer() {
   const { id } = useParams<{ id: string }>();
@@ -113,8 +114,22 @@ export function BookDetailContainer() {
   };
 
   const handleStartReading = () => {
+    if (!book.file_url) {
+      toast({ title: "Thiếu file PDF", description: "Vui lòng tải lên file PDF để đọc.", variant: "destructive" });
+      return;
+    }
+
+    if (book.format && book.format !== "pdf") {
+      toast({
+        title: "Chỉ hỗ trợ PDF",
+        description: "Bookie Bee hiện chưa hỗ trợ EPUB/TXT. Hãy chuyển sang file PDF để tiếp tục.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (id) {
-      navigate(`/reader/${id}`);
+      navigate(`/read/${id}`);
     }
   };
 
@@ -160,6 +175,15 @@ export function BookDetailContainer() {
 
         <div className="space-y-0">
           <BookHero book={book} />
+
+          {((book.format && book.format !== "pdf") || !book.file_url) && (
+            <Alert className="mb-8 border-[#FCD5C0] bg-[#FFF6F0] text-[#7C2E12]">
+              <AlertTitle>Chỉ hỗ trợ PDF</AlertTitle>
+              <AlertDescription>
+                Bookie Bee hiện tập trung vào trải nghiệm đọc PDF. Vui lòng đảm bảo bạn đã tải lên file PDF hợp lệ để mở trong trình đọc.
+              </AlertDescription>
+            </Alert>
+          )}
 
           <ActionButtons
             book={book}

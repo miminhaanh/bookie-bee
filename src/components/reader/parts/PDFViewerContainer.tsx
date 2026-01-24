@@ -4,7 +4,8 @@ import "@react-pdf-viewer/highlight/lib/styles/index.css";
 import "@react-pdf-viewer/bookmark/lib/styles/index.css";
 import "@react-pdf-viewer/page-navigation/lib/styles/index.css";
 import "@react-pdf-viewer/zoom/lib/styles/index.css";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.js?url";
+
+const PDF_WORKER_URL = "https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
 
 interface PDFViewerContainerProps {
   fileUrl: string;
@@ -23,7 +24,7 @@ export const PDFViewerContainer = ({
 }: PDFViewerContainerProps) => {
   return (
     <div className="flex-1 h-full overflow-hidden relative">
-      <Worker workerUrl={pdfWorkerUrl}>
+      <Worker workerUrl={PDF_WORKER_URL}>
         <Viewer
           fileUrl={fileUrl}
           plugins={plugins}

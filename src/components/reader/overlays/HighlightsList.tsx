@@ -10,7 +10,6 @@ interface HighlightsListProps {
   highlights: DbHighlight[];
   isLoading: boolean;
   deletingId: string | null;
-  isPdf: boolean;
   onJumpToPage: (pageNumber: number) => void;
   onDeleteHighlight: (highlightId: string) => Promise<void>;
 }
@@ -21,7 +20,6 @@ export const HighlightsList = ({
   highlights,
   isLoading,
   deletingId,
-  isPdf,
   onJumpToPage,
   onDeleteHighlight,
 }: HighlightsListProps) => {
@@ -47,7 +45,6 @@ export const HighlightsList = ({
                 className="relative w-full rounded-lg border border-border border-l-4 p-3 text-left transition-colors hover:bg-muted"
                 style={{ borderLeftColor: colorToBackground(h.color) }}
                 onClick={() => {
-                  if (!isPdf) return;
                   const pageNumberFromDb = h.page_number;
                   if (!pageNumberFromDb) return;
                   onJumpToPage(pageNumberFromDb);

@@ -92,7 +92,7 @@ const Upload = () => {
 
   const getFileFormat = (fileName: string) => {
     const ext = fileName.split(".").pop()?.toLowerCase();
-    return ["pdf", "epub", "txt"].includes(ext || "") ? (ext as BookFormat) : null;
+    return ext === "pdf" ? "pdf" : null;
   };
 
   const sanitation = (name: string) => name.replace(/[^a-zA-Z0-9.-]/g, "-").toLowerCase();
@@ -109,7 +109,7 @@ const Upload = () => {
     if (!file) return;
     const format = getFileFormat(file.name);
     if (!format) {
-      toast({ title: "Định dạng không hỗ trợ", description: "Chỉ hỗ trợ PDF, EPUB, TXT", variant: "destructive" });
+      toast({ title: "Định dạng không hỗ trợ", description: "Chỉ hỗ trợ PDF", variant: "destructive" });
       return;
     }
     if (file.size > 50 * 1024 * 1024) {
@@ -117,7 +117,7 @@ const Upload = () => {
       return;
     }
     setUploadedFile(file);
-    setFormData(prev => ({ ...prev, title: file.name.replace(/\.(pdf|epub|txt)$/i, "").replace(/_/g, " ") }));
+    setFormData(prev => ({ ...prev, title: file.name.replace(/\.pdf$/i, "").replace(/_/g, " ") }));
   };
 
   const handleCoverSelect = (file: File | null) => {
@@ -233,7 +233,7 @@ const Upload = () => {
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tải sách lên BookNest</h1>
           </div>
           <p className="text-slate-500 text-base max-w-2xl">
-            Lưu trữ và chia sẻ những cuốn sách yêu thích của bạn. Hỗ trợ định dạng PDF, EPUB.
+            Lưu trữ và chia sẻ những cuốn sách yêu thích của bạn. Hiện chỉ hỗ trợ PDF.
           </p>
         </header>
 
@@ -255,7 +255,7 @@ const Upload = () => {
               }}
               onClick={() => document.getElementById("file-upload")?.click()}
             >
-              <input id="file-upload" type="file" className="hidden" accept=".pdf,.epub,.txt" onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} />
+              <input id="file-upload" type="file" className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} />
 
               {uploadedFile ? (
                 <div className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
@@ -280,7 +280,7 @@ const Upload = () => {
                     <p className="font-medium text-slate-700">Kéo thả file vào đây</p>
                     <p className="text-sm text-slate-400">hoặc click để chọn file</p>
                   </div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-widest pt-4">Max 50MB • PDF, EPUB</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest pt-4">Max 50MB • PDF</p>
                 </div>
               )}
             </div>

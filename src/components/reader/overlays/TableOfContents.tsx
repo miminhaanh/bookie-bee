@@ -5,14 +5,12 @@ import { Button } from "@/components/ui/button";
 interface TableOfContentsProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  isPdf: boolean;
   bookmarksComponent: React.ReactNode;
 }
 
 export const TableOfContents = ({
   isOpen,
   onOpenChange,
-  isPdf,
   bookmarksComponent,
 }: TableOfContentsProps) => {
   return (
@@ -32,12 +30,8 @@ export const TableOfContents = ({
           <SheetTitle>Mục lục</SheetTitle>
         </SheetHeader>
 
-        <div className="mt-6 flex-1 overflow-y-auto pr-1">
-          {isPdf ? (
-            <div className="text-sm">{bookmarksComponent}</div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Mục lục chưa hỗ trợ cho định dạng này.</p>
-          )}
+        <div className="mt-6 flex-1 overflow-y-auto pr-1 text-sm">
+          {bookmarksComponent}
         </div>
       </SheetContent>
     </Sheet>

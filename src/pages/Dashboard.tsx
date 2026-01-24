@@ -9,7 +9,6 @@ import { BookShelf } from "@/components/dashboard/BookShelf";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
 import type { BookStatus } from "@/hooks/useBooks";
 import { useReportsData } from "@/hooks/useReportsData";
 import { UserTour } from "@/components/common/UserTour";
@@ -41,7 +40,6 @@ const Dashboard = () => {
   );
 
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
-  const [welcomeBannerSeen, setWelcomeBannerSeen] = useState(false);
   const [runTour, setRunTour] = useState(false);
 
   /* ===================== AUTH GUARD ===================== */
@@ -69,7 +67,7 @@ const Dashboard = () => {
           (supabase as any)
             .from("profiles")
             .select(
-              "avatar_url, display_name, onboarding_completed, welcome_banner_seen, current_streak"
+              "avatar_url, display_name, onboarding_completed, current_streak"
             )
             .eq("user_id", user.id)
             .maybeSingle(),
@@ -93,7 +91,6 @@ const Dashboard = () => {
         setProfileDisplayName(profile?.display_name ?? null);
 
         setOnboardingCompleted(profile?.onboarding_completed ?? false);
-        setWelcomeBannerSeen(profile?.welcome_banner_seen ?? false);
       } catch (err) {
         console.error("Dashboard fetch error:", err);
       } finally {
@@ -117,29 +114,7 @@ const Dashboard = () => {
     );
   };
 
-  // Show welcome banner only if:
-  // 1. Onboarding was completed
-  // 2. Banner hasn't been seen yet
-  // 3. User still has no books
-  // 4. Not searching
-  const shouldShowWelcomeBanner =
-    onboardingCompleted &&
-    !welcomeBannerSeen &&
-    !hasAnyBooks &&
-    !searchQuery;
-
   /* ===================== HANDLERS ===================== */
-  const handleWelcomeBannerClick = async () => {
-    if (!user) return;
-    await (supabase as any)
-      .from("profiles")
-      .update({ welcome_banner_seen: true })
-      .eq("user_id", user.id);
-
-    setWelcomeBannerSeen(true);
-    navigate("/add-book");
-  };
-
   useEffect(() => {
     if (!user || loading) return;
     if (!onboardingCompleted && !hasAnyBooks) {
@@ -173,10 +148,10 @@ const Dashboard = () => {
 
           <ScrollArea className="flex-1">
             <div className="p-6 max-w-7xl mx-auto">
-              <section className="mb-8 grid lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
+              <section className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="md:col-span-2 lg:col-span-2">
                   <ProfileCard
-                    className="profile-card-tour"
+                    className="profile-card-tour h-full"
                     level={reportData?.level.currentLevel ?? 1}
                     xp={reportData?.level.currentXP ?? 0}
                     xpToNextLevel={
@@ -186,29 +161,20 @@ const Dashboard = () => {
                     displayName={profileDisplayName}
                   />
                 </div>
-                <StatsCards
-                  totalBooks={
-                    booksReading.length +
-                    booksCompleted.length +
-                    booksSaved.length
-                  }
-                  completedBooks={booksCompleted.length}
-                  streak={reportData?.streak ?? 0}
-                />
+                <div className="md:col-span-2 lg:col-span-1">
+                  <StatsCards
+                    totalBooks={
+                      booksReading.length +
+                      booksCompleted.length +
+                      booksSaved.length
+                    }
+                    completedBooks={booksCompleted.length}
+                    streak={reportData?.streak ?? 0}
+                  />
+                </div>
               </section>
 
               <DashboardToolbar onSearch={setSearchQuery} />
-
-              {shouldShowWelcomeBanner && (
-                <div className="mt-4 p-6 rounded-2xl bg-pink-50 border">
-                  <h3 className="font-bold mb-2">
-                    👋 Chào mừng bạn lần đầu!
-                  </h3>
-                  <Button onClick={handleWelcomeBannerClick}>
-                    Thêm sách đầu tiên
-                  </Button>
-                </div>
-              )}
 
               <BookShelf
                 title="Đang đọc"

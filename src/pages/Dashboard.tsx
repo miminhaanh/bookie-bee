@@ -123,9 +123,17 @@ const Dashboard = () => {
     );
   };
 
+  // Show onboarding only if:
+  // 1. User has NOT completed onboarding (first time)
+  // 2. User has NO books yet
   const shouldShowOnboarding =
     !onboardingCompleted && !hasAnyBooks;
 
+  // Show welcome banner only if:
+  // 1. Onboarding was completed
+  // 2. Banner hasn't been seen yet
+  // 3. User still has no books
+  // 4. Not searching
   const shouldShowWelcomeBanner =
     onboardingCompleted &&
     !welcomeBannerSeen &&

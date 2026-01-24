@@ -2,6 +2,16 @@ import { useState, useEffect } from "react";
 import { X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const AD_COOKIE_NAME = "bookie_ad_closed";
+const AD_COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+
+// Random delay between 3-10 minutes (180000-600000ms)
+const getRandomDelay = () => {
+  const minDelay = 3 * 60 * 1000; // 3 minutes
+  const maxDelay = 10 * 60 * 1000; // 10 minutes
+  return Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+};
+
 const AdPopup = () => {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -9,15 +19,16 @@ const AdPopup = () => {
         // Check if popup was closed previously
         const isAdClosed = document.cookie
             .split("; ")
-            .find((row) => row.startsWith("bookie_ad_closed="));
+            .find((row) => row.startsWith(`${AD_COOKIE_NAME}=`));
 
         if (!isAdClosed) {
-            // Show popup after 1 minute (60000ms)
-            // For demo purposes, we might want to make it shorter or keep it 1 min as requested.
-            // Requirement: "Popup xuất hiện sau 1 phút kể từ khi mở trang"
+            // Show popup after random delay (3-10 minutes)
+            const delay = getRandomDelay();
+            console.log(`Ad will appear in ${Math.round(delay / 60000)} minutes`);
+            
             const timer = setTimeout(() => {
                 setIsOpen(true);
-            }, 60000);
+            }, delay);
 
             return () => clearTimeout(timer);
         }
@@ -25,10 +36,8 @@ const AdPopup = () => {
 
     const handleClose = () => {
         setIsOpen(false);
-        // Set cookie to prevent reappearing
-        // Requirement: "Khi user ấn đóng popup: Lần sau mở trang không hiện lại"
-        // Valid for 365 days
-        document.cookie = "bookie_ad_closed=true; path=/; max-age=31536000";
+        // Set cookie to prevent reappearing for 7 days
+        document.cookie = `${AD_COOKIE_NAME}=true; path=/; max-age=${AD_COOKIE_MAX_AGE}`;
     };
 
     if (!isOpen) return null;

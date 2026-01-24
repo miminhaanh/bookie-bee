@@ -2,13 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Upload as UploadIcon,
-  Globe,
   Loader2,
   FileText,
   BookOpen,
   X,
-  Lock,
-  Link2,
   CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,18 +65,11 @@ const genres = [
   "Lịch sử", "Tâm lý", "Truyện ngắn", "Tiểu thuyết"
 ];
 
-const privacyOptions = [
-  { id: "private", label: "Riêng tư", icon: Lock, desc: "Chỉ mình tôi" },
-  { id: "link", label: "Chia sẻ link", icon: Link2, desc: "Bất kỳ ai có link" },
-  { id: "public", label: "Công khai", icon: Globe, desc: "Mọi người" },
-];
-
 const Upload = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [privacy, setPrivacy] = useState("private");
   const [uploadProgress, setUploadProgress] = useState<{
     stage: 'idle' | 'reading' | 'uploading' | 'processing' | 'generating-cover' | 'done';
     percent: number;
@@ -159,7 +149,6 @@ const Upload = () => {
         estimated_time_remaining: null,
         is_from_library: false,
         open_library_key: null,
-        visibility: privacy, // Map to new column
       });
 
       if (format === "pdf") {
@@ -295,28 +284,6 @@ const Upload = () => {
                     {genre}
                   </button>
                 ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Quyền riêng tư</Label>
-              <div className="grid grid-cols-3 gap-3">
-                {privacyOptions.map(opt => {
-                  const Icon = opt.icon;
-                  const isActive = privacy === opt.id;
-                  return (
-                    <button key={opt.id} type="button" onClick={() => setPrivacy(opt.id)}
-                      className={cn(
-                        "p-3 rounded-xl border text-left transition-all relative overflow-hidden",
-                        isActive ? "border-rose-500 bg-white shadow-sm ring-1 ring-rose-500/20" : "border-slate-200 bg-slate-50/50 hover:bg-white hover:border-slate-300"
-                      )}>
-                      <Icon className={cn("w-4 h-4 mb-2", isActive ? "text-rose-500" : "text-slate-400")} />
-                      <div className="text-sm font-bold text-slate-800">{opt.label}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5 font-medium">{opt.desc}</div>
-                      {isActive && <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-500 rounded-full" />}
-                    </button>
-                  );
-                })}
               </div>
             </div>
 

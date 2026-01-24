@@ -2,6 +2,30 @@ import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 
+// Generate initials from name
+const getInitials = (name: string) => {
+  return name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) || 'U';
+};
+
+// Generate avatar color from email
+const getAvatarColor = (email: string) => {
+  const colors = [
+    'from-warm-pink to-coral',
+    'from-sage to-soft-sage',
+    'from-lavender to-sky',
+    'from-peach to-coral',
+    'from-primary to-accent',
+    'from-violet-500 to-purple-500'
+  ];
+  const hash = email.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+};
+
 interface ProfileCardProps {
   level?: number;
   xp?: number;
@@ -34,7 +58,9 @@ export function ProfileCard({
 
   const resolvedAvatarUrl = (avatarUrl ?? "").trim() || user?.user_metadata?.avatar_url;
   const resolvedDisplayName = (displayName ?? "").trim() || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Người dùng";
-  const initials = resolvedDisplayName.slice(0, 1).toUpperCase() || user?.email?.charAt(0).toUpperCase() || "U";
+  const userEmail = user?.email || 'user@example.com';
+  const initials = getInitials(resolvedDisplayName);
+  const avatarColorClass = getAvatarColor(userEmail);
   
   const levelInfo = LEVEL_TITLES[level] || LEVEL_TITLES[5];
   const xpProgress = (xp / xpToNextLevel) * 100;
@@ -49,8 +75,10 @@ export function ProfileCard({
         {/* Avatar */}
         <div className="relative">
           <Avatar className="w-16 h-16 border-4 border-warm-pink/30 shadow-lg">
-            <AvatarImage src={resolvedAvatarUrl} />
-            <AvatarFallback className="bg-gradient-to-br from-warm-pink to-coral text-primary-foreground text-xl font-bold">
+            {resolvedAvatarUrl ? (
+              <AvatarImage src={resolvedAvatarUrl} />
+            ) : null}
+            <AvatarFallback className={`bg-gradient-to-br ${avatarColorClass} text-white text-xl font-bold`}>
               {initials}
             </AvatarFallback>
           </Avatar>

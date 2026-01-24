@@ -5,7 +5,9 @@ import path from "path";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    // Dùng cổng 8081 để khớp với origin đã được cấu hình CORS
+    // trong Supabase / Google Fonts (trước đây app chạy ở 8081)
+    port: 8081,
   },
   plugins: [react()],
   resolve: {

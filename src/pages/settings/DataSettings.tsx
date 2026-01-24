@@ -1,256 +1,109 @@
-import { useState } from "react";
+import { motion } from "framer-motion";
+import { Cloud, Download, Trash2, ArrowLeft, RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Cloud, Download, Trash2, Smartphone, Check, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 
-const DataSettingsPage = () => {
+const DataSettings = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-  const { toast } = useToast();
-
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [lastSync, setLastSync] = useState<string | null>(null);
-
-  // Delete account
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    try {
-      // Simulate sync
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const now = new Date().toLocaleString("vi-VN");
-      setLastSync(now);
-      toast({ title: "Đã đồng bộ! ☁️", description: `Lần cuối: ${now}` });
-    } catch {
-      toast({ title: "Lỗi đồng bộ", variant: "destructive" });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      // Get user data
-      const readingSettings = localStorage.getItem(`reading_settings_${user?.id}`);
-      const privacySettings = localStorage.getItem(`privacy_settings_${user?.id}`);
-      const notificationSettings = localStorage.getItem(`notification_settings_${user?.id}`);
-
-      const exportData = {
-        exportDate: new Date().toISOString(),
-        userId: user?.id,
-        email: user?.email,
-        settings: {
-          reading: readingSettings ? JSON.parse(readingSettings) : null,
-          privacy: privacySettings ? JSON.parse(privacySettings) : null,
-          notification: notificationSettings ? JSON.parse(notificationSettings) : null,
-        },
-      };
-
-      // Download as JSON
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `bookie-bee-data-${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast({ title: "Đã xuất dữ liệu! 📥" });
-    } catch {
-      toast({ title: "Lỗi xuất dữ liệu", variant: "destructive" });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== "XÓA TÀI KHOẢN") {
-      toast({ title: "Nhập đúng cụm từ để xác nhận", variant: "destructive" });
-      return;
-    }
-    setIsDeleting(true);
-    try {
-      // Delete user data
-      if (user?.id) {
-        await supabase.from("profiles").delete().eq("id", user.id);
-        await supabase.from("books").delete().eq("user_id", user.id);
-        await supabase.from("reading_sessions").delete().eq("user_id", user.id);
-        await supabase.from("highlights").delete().eq("user_id", user.id);
-        
-        // Clear local storage
-        localStorage.removeItem(`reading_settings_${user.id}`);
-        localStorage.removeItem(`privacy_settings_${user.id}`);
-        localStorage.removeItem(`notification_settings_${user.id}`);
-      }
-
-      await supabase.auth.signOut({ scope: "global" });
-      navigate("/auth", { replace: true });
-    } catch {
-      toast({ title: "Lỗi xóa tài khoản", variant: "destructive" });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
+  const { user } = useAuth();
+  const lastSyncTime = "Vừa xong"; // Mock
 
   return (
-    <DashboardLayout mobileTitle="Dữ liệu">
-      <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20">
-      {/* Header */}
-      <header className="sticky top-16 lg:top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/30">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-muted/50 rounded-lg">
+    <DashboardLayout>
+      <div className="max-w-3xl mx-auto pb-10 px-4 md:px-8">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-8 mt-4 md:mt-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/settings")}
+            className="rounded-xl hover:bg-slate-100 text-slate-500"
+          >
             <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-bold">☁️ Dữ liệu & Đồng bộ</h1>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-nunito font-bold text-slate-800">
+              Dữ liệu & Đồng bộ
+            </h1>
+            <p className="text-slate-500 text-sm font-medium">
+              Quản lý dữ liệu đám mây của bạn
+            </p>
+          </div>
         </div>
-      </header>
 
-      <main className="px-4 py-4 space-y-3">
-        {/* Sync */}
-        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-100 to-cyan-100 flex items-center justify-center">
-                <Cloud className="w-5 h-5 text-blue-500" />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Sync Status Card */}
+          <section className="bg-gradient-to-br from-sky-50 to-white p-6 rounded-3xl border border-sky-100 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-10">
+              <Cloud className="w-32 h-32 text-sky-500" />
+            </div>
+
+            <div className="relative z-10 flex items-start gap-5">
+              <div className="w-12 h-12 rounded-2xl bg-sky-100 flex items-center justify-center text-sky-600 shadow-inner">
+                <RefreshCw className="w-6 h-6 animate-[spin_3s_linear_infinite]" />
               </div>
               <div>
-                <p className="text-sm font-medium">Đồng bộ thiết bị</p>
-                <p className="text-xs text-muted-foreground">
-                  {lastSync ? `Lần cuối: ${lastSync}` : "Chưa đồng bộ"}
+                <h3 className="text-lg font-bold text-slate-700">Đồng bộ đám mây đang bật</h3>
+                <p className="text-sm text-slate-500 mt-1">
+                  Dữ liệu của bạn được tự động sao lưu an toàn.
                 </p>
+                <div className="flex items-center gap-2 mt-4 text-xs font-bold text-sky-600 bg-sky-100/50 px-3 py-1.5 rounded-full w-fit">
+                  <ShieldCheck className="w-3 h-3" />
+                  Đồng bộ lần cuối: {lastSyncTime}
+                </div>
               </div>
             </div>
-            <Button
-              onClick={handleSync}
-              disabled={isSyncing}
-              size="sm"
-              variant="outline"
-              className="rounded-xl h-9"
-            >
-              {isSyncing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
+          </section>
 
-          <div className="mt-4 p-3 rounded-xl bg-muted/30">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Smartphone className="w-4 h-4" />
-              <span>Thiết bị hiện tại</span>
-              <span className="ml-auto px-2 py-0.5 rounded-full bg-green-100 text-green-600 text-[10px] font-medium">
-                Đã kết nối
-              </span>
+          {/* Actions List */}
+          <section className="bg-white/60 rounded-3xl border border-white/60 shadow-sm backdrop-blur-sm overflow-hidden">
+            <button className="w-full p-4 hover:bg-white transition-colors flex items-center gap-4 border-b border-slate-100">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
+                <Download className="w-5 h-5" />
+              </div>
+              <div className="flex-1 text-left">
+                <h4 className="text-sm font-bold text-slate-700">Xuất dữ liệu cá nhân</h4>
+                <p className="text-xs text-slate-500">Tải về bản sao lưu gồm lịch sử đọc và ghi chú</p>
+              </div>
+            </button>
+          </section>
+
+          {/* Danger Zone */}
+          <div className="pt-6">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 ml-2">Vùng nguy hiểm</h4>
+            <div className="bg-red-50/50 border border-red-100 p-6 rounded-3xl">
+              <div className="flex items-start gap-4">
+                <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-red-900">Xóa tài khoản</h3>
+                  <p className="text-sm text-red-700/70 mt-1 leading-relaxed">
+                    Hành động này không thể hoàn tác. Mọi dữ liệu đọc sách, ghi chú và thành tích sẽ bị xóa vĩnh viễn khỏi hệ thống.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    className="mt-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-red-200 shadow-lg"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Xóa tài khoản vĩnh viễn
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Export */}
-        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30">
-          <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="w-full flex items-center gap-3"
-          >
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 flex items-center justify-center">
-              <Download className="w-5 h-5 text-green-500" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium">Xuất dữ liệu đọc</p>
-              <p className="text-xs text-muted-foreground">Tải về dữ liệu cá nhân của bạn</p>
-            </div>
-            {isExporting && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-          </button>
-        </div>
-
-        {/* Delete Account */}
-        <div className="bg-red-50 dark:bg-red-950/30 rounded-2xl p-4 border border-red-200 dark:border-red-900/50">
-          <button
-            onClick={() => setShowDeleteDialog(true)}
-            className="w-full flex items-center gap-3"
-          >
-            <div className="w-11 h-11 rounded-xl bg-red-100 dark:bg-red-900/50 flex items-center justify-center">
-              <Trash2 className="w-5 h-5 text-red-500" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-medium text-red-600">Xóa tài khoản</p>
-              <p className="text-xs text-red-400">Xóa vĩnh viễn tài khoản và dữ liệu</p>
-            </div>
-          </button>
-        </div>
-
-        {/* Warning */}
-        <div className="bg-amber-50 dark:bg-amber-950/30 rounded-2xl p-4 border border-amber-200 dark:border-amber-900/50">
-          <div className="flex items-start gap-3">
-            <span className="text-lg">⚠️</span>
-            <div>
-              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">Lưu ý quan trọng</p>
-              <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                Sau khi xóa tài khoản, tất cả dữ liệu sẽ bị mất vĩnh viễn và không thể khôi phục. 
-                Hãy xuất dữ liệu trước nếu cần.
-              </p>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Delete Dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="rounded-2xl max-w-sm mx-4">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="w-5 h-5" /> Xóa tài khoản
-            </DialogTitle>
-            <DialogDescription>
-              Hành động này không thể hoàn tác. Tất cả sách, ghi chú và dữ liệu đọc sẽ bị xóa vĩnh viễn.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 pt-2">
-            <p className="text-sm text-muted-foreground">
-              Nhập <span className="font-bold text-red-600">XÓA TÀI KHOẢN</span> để xác nhận
-            </p>
-            <Input
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="Nhập XÓA TÀI KHOẢN"
-              className="h-11 rounded-xl"
-            />
-            <Button
-              onClick={handleDeleteAccount}
-              disabled={isDeleting || deleteConfirmText !== "XÓA TÀI KHOẢN"}
-              variant="destructive"
-              className="w-full h-11 rounded-xl"
-            >
-              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
-              Xóa tài khoản
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
+        </motion.div>
       </div>
     </DashboardLayout>
   );
 };
 
-export default DataSettingsPage;
+export default DataSettings;

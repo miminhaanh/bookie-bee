@@ -1,11 +1,11 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  Home, 
-  StickyNote, 
-  BarChart3, 
-  Users, 
-  Settings, 
-  HelpCircle, 
+import {
+  Home,
+  StickyNote,
+  BarChart3,
+  Users,
+  Settings,
+  HelpCircle,
   LogOut,
   Library
 } from "lucide-react";
@@ -53,7 +53,7 @@ export function AppSidebar() {
     <Sidebar className="border-r border-sidebar-border bg-sidebar/80 backdrop-blur-xl">
       <SidebarHeader className="p-6">
         {/* Logo */}
-        <div 
+        <div
           className="flex items-center gap-3 cursor-pointer group"
           onClick={() => navigate('/')}
         >
@@ -102,8 +102,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="px-4 pb-6">
-        <SidebarSeparator className="mb-4" />
-        
+
         {/* System Navigation */}
         <SidebarMenu>
           {systemNavItems.map((item) => (
@@ -121,7 +120,7 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
-          
+
           {/* Logout Button */}
           <SidebarMenuItem>
             <SidebarMenuButton

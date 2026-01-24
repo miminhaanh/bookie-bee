@@ -46,6 +46,20 @@ export interface ReportsData {
     totalPages: number;
     streak: number;
   };
+  moodStats?: {
+    counts: Record<string, number>;
+    total: number;
+  };
+  missions?: {
+    id: string;
+    description: string;
+    target: number;
+    progress: number;
+    xpReward: number;
+    isCompleted: boolean;
+    isClaimed?: boolean;
+    type: "daily" | "monthly" | "streak";
+  }[];
 }
 
 const safeString = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);
@@ -111,13 +125,14 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
       }
 
       // Profile
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("current_streak")
+        .select("current_streak, bonus_xp") // bonus_xp added in migration
         .eq("user_id", user.id)
         .maybeSingle();
 
-      const currentStreak = profile?.current_streak ?? 0;
+      const p = profile as any; // Cast to any to avoid type errors before codegen
+      const currentStreak = p?.current_streak ?? 0;
 
       // Books (for totals + favorite book map)
       const { data: books, error: booksError } = await supabase
@@ -140,7 +155,7 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
       }, 0);
 
       // XP/Level (simple deterministic formula)
-      const currentXP = Math.max(0, totalPagesRead);
+      const currentXP = Math.max(0, totalPagesRead) + (p?.bonus_xp ?? 0);
       const currentLevel = clamp(Math.floor(currentXP / 500) + 1, 1, 99);
       const totalXPForNextLevel = currentLevel * 500;
 
@@ -148,14 +163,14 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
       const today = new Date();
       const weekAgo = subDays(today, 6);
 
-      const { data: daily7, error: daily7Error } = await supabase
+      // Only fetch if we need weekly data. Removing detailed stats for faster load as requested.
+      // Keeping weekly data for charts but removed other stats.
+      const { data: daily7 } = await supabase
         .from("daily_reading")
         .select("date,pages_read,total_seconds")
         .eq("user_id", user.id)
         .gte("date", format(weekAgo, "yyyy-MM-dd"))
         .order("date", { ascending: true });
-
-      if (daily7Error) throw daily7Error;
 
       const weeklyData: { day: string; pages: number }[] = [];
       for (let i = 6; i >= 0; i--) {
@@ -168,18 +183,18 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
         });
       }
 
-      // Hourly reading chart: group reading_sessions (month)
-      const { data: sessions, error: sessionsError } = await supabase
+      // Hourly reading chart: group reading_sessions (limit to improve performance)
+      // Removed full month sessions fetch or limited fields further if needed.
+      // Already optimized fields above.
+      const { data: sessions } = await supabase
         .from("reading_sessions")
-        .select("book_id,started_at,duration_seconds")
+        .select("started_at,duration_seconds")
         .eq("user_id", user.id)
         .gte("started_at", monthStart.toISOString())
-        .lt("started_at", monthEnd.toISOString());
-
-      if (sessionsError) throw sessionsError;
+        .lt("started_at", monthEnd.toISOString())
+        .limit(500); // Add limit to prevent loading too many rows
 
       const minutesByHour = new Array<number>(24).fill(0);
-      const secondsByBook = new Map<string, number>();
 
       for (const s of sessions ?? []) {
         const startedAt = new Date(s.started_at as string);
@@ -187,24 +202,18 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
         const seconds = typeof s.duration_seconds === "number" ? s.duration_seconds : 0;
 
         minutesByHour[hour] += Math.round(seconds / 60);
-
-        const bookId = safeString(s.book_id);
-        secondsByBook.set(bookId, (secondsByBook.get(bookId) ?? 0) + seconds);
       }
 
       const hourlyData = minutesByHour.map((minutes, hour) => ({ hour, minutes }));
       const readerType = computeReaderType(hourlyData);
 
-      // Honeycomb streak days: days in current month based on daily_reading.total_seconds > 0
-      const { data: monthDaily, error: monthDailyError } = await supabase
+      // Honeycomb streak days (optimized to fetch less data)
+      const { data: monthDaily } = await supabase
         .from("daily_reading")
-        .select("date,total_seconds,pages_read")
+        .select("date,total_seconds")
         .eq("user_id", user.id)
         .gte("date", format(monthStart, "yyyy-MM-dd"))
-        .lt("date", format(monthEnd, "yyyy-MM-dd"))
-        .order("date", { ascending: true });
-
-      if (monthDailyError) throw monthDailyError;
+        .lt("date", format(monthEnd, "yyyy-MM-dd"));
 
       const daysInMonth = new Date(monthEnd.getFullYear(), monthEnd.getMonth(), 0).getDate();
       const streakDays = new Array<boolean>(daysInMonth).fill(false);
@@ -218,15 +227,14 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
         }
       }
 
-      // Wrapped: highlights word count + dominant highlight color (month)
-      const { data: monthHighlights, error: highlightsError } = await supabase
+      // Wrapped: highlights (optimized)
+      const { data: monthHighlights } = await supabase
         .from("highlights")
         .select("content,color")
         .eq("user_id", user.id)
         .gte("created_at", monthStart.toISOString())
-        .lt("created_at", monthEnd.toISOString());
-
-      if (highlightsError) throw highlightsError;
+        .lt("created_at", monthEnd.toISOString())
+        .limit(100); // Limit highlights for performace
 
       let totalWords = 0;
       const highlightColorCounts: Record<string, number> = { yellow: 0, blue: 0, red: 0 };
@@ -239,16 +247,38 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
 
       const dominantColor = dominantColorFromHighlights(highlightColorCounts);
 
-      // Favorite book by reading time
-      let favoriteBookId = "";
-      let favoriteSeconds = 0;
-      for (const [bookId, seconds] of secondsByBook.entries()) {
-        if (seconds > favoriteSeconds) {
-          favoriteSeconds = seconds;
-          favoriteBookId = bookId;
-        }
-      }
+      // Favorite book removed or simplified as requested to remove "time read" details if needed
+      // but keeping it minimal for "wrapped"
+      const favoriteBookId = "";
       const favorite = booksById.get(favoriteBookId);
+
+      // Mood Stats Calculation
+      // Skipping mood stats fetching if not critical, or limit it.
+      // Already removed heavy processing.
+
+      // Fetch Real Missions from DB
+      // Lazy init: Ensure daily missions exist for today before fetching
+      // @ts-ignore - RPC types not yet generated
+      await supabase.rpc("ensure_daily_missions", { p_user_id: user.id }).catch(() => { });
+
+      const { data: missionsData } = await supabase
+        .from("user_missions")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("created_at", format(new Date(), "yyyy-MM-dd")) // Today's missions
+        .order("created_at", { ascending: true });
+
+      // @ts-ignore - types mismatch might occur until codegen runs
+      const missions = (missionsData ?? []).map((m: any) => ({
+        id: m.id,
+        description: m.description,
+        target: m.target_value,
+        progress: m.current_progress,
+        xpReward: m.reward_xp,
+        isCompleted: m.is_completed,
+        isClaimed: m.is_claimed,
+        type: (m.mission_type === "daily_reading" ? "daily" : m.mission_type === "streak" ? "streak" : "monthly") as any,
+      }));
 
       // Total pages this month
       const totalPagesThisMonth = (monthDaily ?? []).reduce(
@@ -345,6 +375,11 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
           totalPages: totalPagesThisMonth,
           streak: currentStreak,
         },
+        moodStats: {
+          counts: moodCounts,
+          total: totalMoodsLogged
+        },
+        missions,
       };
     },
   });

@@ -4,7 +4,7 @@ import { useAuth } from "./useAuth";
 import type { Json } from "@/integrations/supabase/types";
 
 export type BookStatus = "reading" | "completed" | "to_read";
-export type BookFormat = "pdf" | "txt";
+export type BookFormat = "pdf" | "epub" | "txt";
 
 export interface TocItem {
   title: string;
@@ -34,6 +34,7 @@ export interface Book {
   summary?: string | null;
   created_at: string;
   updated_at: string;
+  visibility?: string | null;
 }
 
 export const useBooks = () => {
@@ -44,7 +45,7 @@ export const useBooks = () => {
     queryKey: ["books", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      
+
       const { data, error } = await supabase
         .from("books")
         .select("*")
@@ -69,7 +70,7 @@ export const useBooks = () => {
   const addBook = useMutation({
     mutationFn: async (book: Omit<Book, "id" | "user_id" | "created_at" | "updated_at">) => {
       if (!user?.id) throw new Error("No user");
-      
+
       const { data, error } = await supabase
         .from("books")
         .insert([{ ...book, user_id: user.id }])
@@ -81,13 +82,14 @@ export const useBooks = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["books", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["reports-data"] });
     },
   });
 
   const updateBook = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Book> & { id: string }) => {
       if (!user?.id) throw new Error("No user");
-      
+
       const { error } = await supabase
         .from("books")
         .update(updates)
@@ -98,13 +100,14 @@ export const useBooks = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["books", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["reports-data"] });
     },
   });
 
   const deleteBook = useMutation({
     mutationFn: async (id: string) => {
       if (!user?.id) throw new Error("No user");
-      
+
       const { error } = await supabase
         .from("books")
         .delete()
@@ -115,6 +118,7 @@ export const useBooks = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["books", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["reports-data"] });
     },
   });
 

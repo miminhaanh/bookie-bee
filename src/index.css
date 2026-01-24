@@ -179,6 +179,35 @@
     box-shadow: var(--shadow-card);
   }
 
+  .glass-translate-card {
+    background: rgba(255, 136, 202, 0.18);
+    border-radius: 16px;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(8.7px);
+    -webkit-backdrop-filter: blur(8.7px);
+    border: 1px solid rgba(255, 181, 221, 0.414);
+    transform-origin: center;
+    will-change: transform;
+  }
+
+  /* Keep the animate.css API (animate__pulse) but tailor the motion for the translate card:
+     start slightly larger, then settle back to scale(1). */
+  .glass-translate-card.animate__animated.animate__pulse {
+    animation-name: translate-pulse;
+  }
+
+
+@keyframes translate-pulse {
+  0% {
+    transform: scale(1.1);
+  }
+  60% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
   .cozy-shadow {
     box-shadow: var(--shadow-soft);
   }

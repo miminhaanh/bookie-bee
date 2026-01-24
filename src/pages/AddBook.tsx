@@ -140,7 +140,6 @@ const Upload = () => {
   const getFileFormat = (fileName: string): BookFormat | null => {
     const ext = fileName.split(".").pop()?.toLowerCase();
     if (ext === "pdf") return "pdf";
-    if (ext === "epub") return "epub";
     if (ext === "txt") return "txt";
     return null;
   };
@@ -174,12 +173,12 @@ const Upload = () => {
       if (format) {
         setUploadedFile(file);
         // Extract title from filename
-        const title = file.name.replace(/\.(pdf|epub|txt)$/i, "").replace(/_/g, " ");
+        const title = file.name.replace(/\.(pdf|txt)$/i, "").replace(/_/g, " ");
         setFormData(prev => ({ ...prev, title }));
       } else {
         toast({
           title: "Định dạng không hỗ trợ",
-          description: "Chỉ hỗ trợ file PDF, EPUB hoặc TXT",
+          description: "Chỉ hỗ trợ file PDF hoặc TXT",
           variant: "destructive",
         });
       }
@@ -195,7 +194,7 @@ const Upload = () => {
     if (!format) {
       toast({
         title: "Định dạng không hỗ trợ",
-        description: "Chỉ hỗ trợ file PDF, EPUB hoặc TXT",
+        description: "Chỉ hỗ trợ file PDF hoặc TXT",
         variant: "destructive",
       });
       return;
@@ -213,7 +212,7 @@ const Upload = () => {
 
     setUploadedFile(file);
     // Extract title from filename
-    const title = file.name.replace(/\.(pdf|epub|txt)$/i, "").replace(/_/g, " ");
+    const title = file.name.replace(/\.(pdf|txt)$/i, "").replace(/_/g, " ");
     setFormData(prev => ({ ...prev, title }));
   };
 
@@ -255,7 +254,7 @@ const Upload = () => {
 
       // Add book to database
       const createdBook = await addBook.mutateAsync({
-        title: formData.title || uploadedFile.name.replace(/\.(pdf|epub|txt)$/i, ""),
+        title: formData.title || uploadedFile.name.replace(/\.(pdf|txt)$/i, ""),
         author: formData.author || null,
         description: formData.description || null,
         cover_url: null,
@@ -373,7 +372,7 @@ const Upload = () => {
           >
             <input
               type="file"
-              accept=".pdf,.epub,.txt"
+              accept=".pdf,.txt"
               onChange={handleFileInput}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
@@ -412,7 +411,7 @@ const Upload = () => {
                   Kéo thả file vào đây hoặc click để chọn
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Hỗ trợ: PDF, EPUB, TXT (Tối đa 50MB)
+                  Hỗ trợ: PDF, TXT (Tối đa 50MB)
                 </p>
               </>
             )}

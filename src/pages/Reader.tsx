@@ -9,6 +9,8 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ZoomIn as ZoomInIcon,
+  ZoomOut as ZoomOutIcon,
   X,
   Trash2,
   Minus,
@@ -27,7 +29,6 @@ import { useSaveReadingProgress } from "@/hooks/useSaveReadingProgress";
 import { useHighlights, type Highlight as DbHighlight } from "@/hooks/useHighlights";
 import { useProfile } from "@/hooks/useProfile";
 import { cn } from "@/lib/utils";
-import ePub from "epubjs";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ScrollMode,
@@ -53,12 +54,6 @@ import "@react-pdf-viewer/page-navigation/lib/styles/index.css";
 import { zoomPlugin } from "@react-pdf-viewer/zoom";
 import "@react-pdf-viewer/zoom/lib/styles/index.css";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.js?url";
-
-type EpubTocItem = {
-  label: string;
-  href?: string;
-  subitems?: EpubTocItem[];
-};
 
 type TranslateHistoryItem = {
   id: string;
@@ -163,7 +158,6 @@ const Reader = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [scrollMode, setScrollMode] = useState<ScrollMode>(ScrollMode.Vertical);
   const [isPdf, setIsPdf] = useState(false);
-  const [isEpub, setIsEpub] = useState(false);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [hasVisitedPage, setHasVisitedPage] = useState(false);
@@ -171,8 +165,6 @@ const Reader = () => {
   const [pageHighlights, setPageHighlights] = useState<DbHighlight[]>([]);
   const [isHighlightsOpen, setIsHighlightsOpen] = useState(false);
   const [isTocOpen, setIsTocOpen] = useState(false);
-  const [epubToc, setEpubToc] = useState<EpubTocItem[]>([]);
-  const [isEpubTocLoading, setIsEpubTocLoading] = useState(false);
   const [highlightsList, setHighlightsList] = useState<DbHighlight[]>([]);
   const [isHighlightsLoading, setIsHighlightsLoading] = useState(false);
 
@@ -183,9 +175,6 @@ const Reader = () => {
   const [translateError, setTranslateError] = useState<string | null>(null);
   const [isTranslateHistoryOpen, setIsTranslateHistoryOpen] = useState(false);
   const [translateHistory, setTranslateHistory] = useState<TranslateHistoryItem[]>([]);
-  const epubRef = useRef<HTMLDivElement | null>(null);
-  const renditionRef = useRef<unknown>(null);
-  const bookRef = useRef<unknown>(null);
   const pdfWrapperRef = useRef<HTMLDivElement | null>(null);
   const currentPageRef = useRef(currentPage);
   
@@ -293,17 +282,6 @@ const Reader = () => {
 
   const currentTheme = themeStyles[theme];
 
-  // Sample content for demo (in real app, this would be parsed from EPUB/PDF)
-  const sampleContent = `
-    <h2>Chương 1: Khởi đầu</h2>
-    <p>Đây là nội dung mẫu để demo giao diện đọc sách. Trong ứng dụng thực tế, nội dung sẽ được parse từ file EPUB hoặc PDF.</p>
-    <p>BookWorm cung cấp trải nghiệm đọc sách tối ưu với nhiều tùy chọn cá nhân hóa. Bạn có thể điều chỉnh font chữ, kích thước, khoảng cách dòng và theme theo sở thích.</p>
-    <p>Tính năng highlight cho phép bạn đánh dấu những đoạn văn hay và thêm ghi chú cá nhân. Tất cả sẽ được lưu trữ và đồng bộ trên cloud.</p>
-    <p>Hệ thống tracking thời gian đọc giúp bạn theo dõi tiến độ và duy trì thói quen đọc sách hàng ngày. Streak sẽ được cập nhật khi bạn đọc ít nhất 5 phút mỗi ngày.</p>
-    <blockquote>"Đọc sách là hành trình khám phá thế giới qua từng trang giấy."</blockquote>
-    <p>Hy vọng bạn có những phút giây thư giãn cùng BookWorm! 📚</p>
-  `;
-
   // Auto-hide UI when scrolling
   const handleScroll = useCallback(() => {
     setShowUI(false);
@@ -327,7 +305,6 @@ const Reader = () => {
   useEffect(() => {
     const ext = fileUrl.split(".").pop()?.toLowerCase();
     setIsPdf(ext === "pdf");
-    setIsEpub(ext === "epub");
   }, [fileUrl]);
 
   // Highlights hook for saving highlights
@@ -579,7 +556,11 @@ const Reader = () => {
   const pageNavigationPluginInstance = pageNavigationPlugin();
   const zoomPluginInstance = zoomPlugin();
 
-  const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
+  const {
+    ZoomIn: PdfZoomIn,
+    ZoomOut: PdfZoomOut,
+    CurrentScale: PdfCurrentScale,
+  } = zoomPluginInstance;
   const { CurrentPageInput, NumberOfPages } = pageNavigationPluginInstance;
   const { Bookmarks } = bookmarkPluginInstance;
 
@@ -676,96 +657,6 @@ const Reader = () => {
     navigate("/auth", { replace: true });
   }, [navigate, shouldRedirectToAuth]);
 
-  // Initialize EPUB rendering when needed
-  useEffect(() => {
-    if (!isEpub || !fileUrl || !epubRef.current) return;
-
-    const bookObj = ePub(fileUrl);
-    bookRef.current = bookObj;
-    const rendition = bookObj.renderTo(epubRef.current, {
-      width: "100%",
-      height: "100%",
-      spread: "none",
-    });
-    rendition.display();
-    renditionRef.current = rendition;
-
-    const onRelocated = () => {
-      // We don't know exact page count for EPUB easily; navigation buttons call rendition.prev/next
-    };
-
-    rendition.on("relocated", onRelocated);
-
-    return () => {
-      try {
-        if (rendition && typeof rendition.destroy === "function") rendition.destroy();
-        if (bookObj && typeof (bookObj as unknown as { destroy?: unknown }).destroy === "function") {
-          (bookObj as unknown as { destroy: () => void }).destroy();
-        }
-      } catch (e) {
-        // ignore
-      }
-    };
-  }, [isEpub, fileUrl]);
-
-  // Load EPUB table of contents on demand
-  useEffect(() => {
-    if (!isTocOpen) return;
-    if (!isEpub) return;
-    if (epubToc.length > 0) return;
-    if (!bookRef.current) return;
-
-    let cancelled = false;
-    setIsEpubTocLoading(true);
-
-    const run = async () => {
-      try {
-        const bookObj = bookRef.current as unknown as {
-          loaded?: { navigation?: Promise<unknown> };
-          navigation?: { toc?: unknown[] };
-        };
-
-        // epubjs exposes navigation either via loaded.navigation or book.navigation
-        if (bookObj.loaded?.navigation) {
-          await bookObj.loaded.navigation;
-        }
-
-        const rawToc = (bookObj.navigation as { toc?: unknown[] } | undefined)?.toc;
-        const normalize = (items: unknown[]): EpubTocItem[] => {
-          return items
-            .map((it) => {
-              const x = it as { label?: string; href?: string; subitems?: unknown[]; subitems2?: unknown[] };
-              const children = Array.isArray(x.subitems)
-                ? x.subitems
-                : Array.isArray(x.subitems2)
-                  ? x.subitems2
-                  : [];
-              return {
-                label: String(x.label ?? ""),
-                href: x.href,
-                subitems: children.length ? normalize(children) : [],
-              } satisfies EpubTocItem;
-            })
-            .filter((x) => x.label.trim().length > 0);
-        };
-
-        const toc = Array.isArray(rawToc) ? normalize(rawToc) : [];
-        if (!cancelled) setEpubToc(toc);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn("Failed to load EPUB TOC:", err);
-        if (!cancelled) setEpubToc([]);
-      } finally {
-        if (!cancelled) setIsEpubTocLoading(false);
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [epubToc.length, isEpub, isTocOpen]);
-
   // Try to prefetch PDF into a blob URL to avoid CORS/authorization issues when loading in <Document />
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -817,6 +708,47 @@ const Reader = () => {
     };
   }, [pdfBlobUrl]);
 
+  const showControls = showUI;
+  const totalPagesForUi = (isPdf && numPages ? numPages : totalPages) ?? null;
+  const safeTotalPagesForUi = totalPagesForUi && totalPagesForUi > 0 ? totalPagesForUi : 1;
+  const progress = Math.round((currentPage / safeTotalPagesForUi) * 100);
+
+  const handlePrevPage = useCallback(() => {
+    if (isPdf) {
+      pageNavigationPluginInstance.jumpToPreviousPage();
+      return;
+    }
+    setCurrentPage((p) => Math.max(1, p - 1));
+  }, [isPdf, pageNavigationPluginInstance]);
+
+  const handleNextPage = useCallback(() => {
+    if (isPdf) {
+      pageNavigationPluginInstance.jumpToNextPage();
+      return;
+    }
+    setCurrentPage((p) => Math.min(safeTotalPagesForUi, p + 1));
+  }, [isPdf, pageNavigationPluginInstance, safeTotalPagesForUi]);
+
+  const handleSliderChange = useCallback(
+    ([value]: number[]) => {
+      const next = Math.min(Math.max(1, value), safeTotalPagesForUi);
+      if (isPdf) {
+        try {
+          pageNavigationPluginInstance.jumpToPage(next - 1);
+          setCurrentPage(next);
+          setHasVisitedPage(true);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("Failed to jump to page:", err);
+        }
+        return;
+      }
+
+      setCurrentPage(next);
+    },
+    [isPdf, pageNavigationPluginInstance, safeTotalPagesForUi],
+  );
+
   return (
     <div
       className={cn(
@@ -835,7 +767,7 @@ const Reader = () => {
           }}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl border border-border bg-background/70 p-4 shadow-float backdrop-blur-xl"
+            className="glass-translate-card p-4 animate__animated animate__pulse"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-label="Bản dịch"
@@ -898,22 +830,11 @@ const Reader = () => {
               </div>
             </Worker>
           </div>
-        ) : isEpub && fileUrl ? (
-          <div className="h-full w-full" ref={epubRef} />
         ) : (
-          <div className="h-full w-full overflow-auto px-4 py-14" onScroll={handleScroll}>
-            <article
-              className={cn(
-                "max-w-2xl mx-auto prose prose-lg",
-                fontFamily === "serif" ? "font-serif" : "font-sans",
-                currentTheme.text,
-              )}
-              style={{
-                fontSize: `${fontSize}px`,
-                lineHeight: lineHeight,
-              }}
-              dangerouslySetInnerHTML={{ __html: sampleContent }}
-            />
+          <div className="flex h-full w-full items-center justify-center px-6 text-center">
+            <p className="text-sm text-muted-foreground">
+              Trình đọc hiện chỉ hỗ trợ PDF. Vui lòng tải lên hoặc mở sách định dạng PDF.
+            </p>
           </div>
         )}
       </div>
@@ -939,9 +860,14 @@ const Reader = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           
-          <h1 className="text-sm font-medium truncate max-w-[200px]">
-            {book?.title ?? "Đang đọc"}
-          </h1>
+          <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-2 text-center">
+            <p className="w-full break-words whitespace-normal text-sm font-bold leading-tight">
+              {book?.title ?? "Đang đọc"}
+            </p>
+            <p className="w-full break-words whitespace-normal text-xs font-normal leading-tight text-muted-foreground">
+              {book?.author?.trim() ? book.author : "Không rõ tác giả"}
+            </p>
+          </div>
 
           <div className="flex items-center gap-2">
             <Sheet open={isTocOpen} onOpenChange={setIsTocOpen}>
@@ -965,50 +891,8 @@ const Reader = () => {
                     <div className="text-sm">
                       <Bookmarks />
                     </div>
-                  ) : isEpub ? (
-                    isEpubTocLoading ? (
-                      <div className="flex items-center justify-center py-6">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                      </div>
-                    ) : epubToc.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Sách này chưa có mục lục.</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {(() => {
-                          const renderItems = (items: EpubTocItem[], depth = 0) => {
-                            return items.map((item, idx) => (
-                              <div key={`${depth}-${idx}-${item.href ?? item.label}`}>
-                                <button
-                                  type="button"
-                                  className={cn(
-                                    "w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
-                                    depth > 0 ? "pl-" + String(Math.min(2 + depth * 2, 10)) : "",
-                                  )}
-                                  style={{ paddingLeft: depth ? `${8 + depth * 12}px` : undefined }}
-                                  onClick={() => {
-                                    const href = item.href;
-                                    if (!href) return;
-                                    const rendition = renditionRef.current as unknown as { display?: (target: string) => unknown };
-                                    if (typeof rendition?.display === "function") {
-                                      void rendition.display(href);
-                                      setIsTocOpen(false);
-                                    }
-                                  }}
-                                >
-                                  {item.label}
-                                </button>
-                                {item.subitems && item.subitems.length ? (
-                                  <div className="mt-1">{renderItems(item.subitems, depth + 1)}</div>
-                                ) : null}
-                              </div>
-                            ));
-                          };
-                          return renderItems(epubToc);
-                        })()}
-                      </div>
-                    )
                   ) : (
-                    <p className="text-sm text-muted-foreground">Mục lục chưa hỗ trợ cho định dạng này.</p>
+                    <p className="text-sm text-muted-foreground">Mục lục trống</p>
                   )}
                 </div>
               </SheetContent>
@@ -1230,6 +1114,57 @@ const Reader = () => {
                   </div>
                 ) : null}
 
+                {/* Zoom controls (PDF only) */}
+                {isPdf ? (
+                  <div>
+                    <Label className="text-sm font-medium">Zoom</Label>
+                    <div className="mt-2 flex items-center gap-2">
+                      <PdfZoomOut>
+                        {(props) => (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Thu nhỏ"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              props.onClick();
+                            }}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </PdfZoomOut>
+
+                      <PdfCurrentScale>
+                        {(props) => (
+                          <div
+                            className="flex h-10 min-w-20 items-center justify-center rounded-md border border-border bg-background px-3 text-sm tabular-nums"
+                            aria-label="Mức zoom"
+                          >
+                            {Math.round(props.scale * 100)}%
+                          </div>
+                        )}
+                      </PdfCurrentScale>
+
+                      <PdfZoomIn>
+                        {(props) => (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Phóng to"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              props.onClick();
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </PdfZoomIn>
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Theme */}
                 <div>
                   <Label className="text-sm font-medium">Theme</Label>
@@ -1322,229 +1257,103 @@ const Reader = () => {
         </div>
       </header>
 
-      {/* Bottom bar */}
-      <footer 
+      {/* Bottom Controls */}
+      <div
         className={cn(
           "fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 safe-area-bottom",
-          showUI ? "translate-y-0" : "translate-y-full",
-          "bg-background/80 backdrop-blur-sm border-t border-border"
+          showControls ? "translate-y-0" : "translate-y-full",
         )}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-2 py-1.5">
-          {/* Progress */}
-          <div className="mb-1 flex items-center justify-between text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1">
-              Trang
-              {isPdf ? (
-                <span
-                  className="inline-flex items-center gap-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <CurrentPageInput />
-                  <span>/</span>
-                  <NumberOfPages />
-                </span>
-              ) : (
-                <span>
-                  {currentPage}/{totalPages}
-                </span>
-              )}
-            </span>
-            <span>{Math.round((currentPage / (isPdf && numPages ? numPages : totalPages)) * 100)}%</span>
-          </div>
-          
-          {/* Navigation */}
-          <div className="flex items-center gap-4">
-            {isPdf ? (
-              scrollMode === ScrollMode.Horizontal ? (
-                <div
-                  className="flex w-full items-center justify-between"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Trang trước"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      pageNavigationPluginInstance.jumpToPreviousPage();
-                    }}
-                    disabled={currentPage <= 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
+        <div className="glass-card border-t border-border/50 px-4 py-3">
+          <div className="container mx-auto">
+            {/* Page Navigation */}
+            <div className="mb-3 flex items-center justify-between gap-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
 
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <ZoomOut>
-                      {(props) => (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          aria-label="Thu nhỏ"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            props.onClick();
-                          }}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </ZoomOut>
-
-                    <CurrentScale>
-                      {(props) => (
-                        <div
-                          className="flex h-9 min-w-14 items-center justify-center rounded-md border border-border bg-background px-2 text-xs tabular-nums"
-                          aria-label="Mức zoom"
-                        >
-                          {Math.round(props.scale * 100)}%
-                        </div>
-                      )}
-                    </CurrentScale>
-
-                    <ZoomIn>
-                      {(props) => (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          aria-label="Phóng to"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            props.onClick();
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </ZoomIn>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Trang sau"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      pageNavigationPluginInstance.jumpToNextPage();
-                    }}
-                    disabled={!!numPages && currentPage >= numPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex w-full items-center justify-center" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                    <ZoomOut>
-                      {(props) => (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          aria-label="Thu nhỏ"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            props.onClick();
-                          }}
-                        >
-                          <Minus className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </ZoomOut>
-
-                    <div
-                      className="flex h-9 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
-                      aria-label="Nhảy đến trang"
-                    >
-                      <CurrentPageInput />
-                      <span className="mx-1 text-muted-foreground">/</span>
-                      <NumberOfPages />
-                    </div>
-
-                    <CurrentScale>
-                      {(props) => (
-                        <div
-                          className="flex h-9 min-w-14 items-center justify-center rounded-md border border-border bg-background px-2 text-xs tabular-nums"
-                          aria-label="Mức zoom"
-                        >
-                          {Math.round(props.scale * 100)}%
-                        </div>
-                      )}
-                    </CurrentScale>
-
-                    <ZoomIn>
-                      {(props) => (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          aria-label="Phóng to"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            props.onClick();
-                          }}
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </ZoomIn>
-                  </div>
-                </div>
-              )
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (
-                      isEpub &&
-                      renditionRef.current &&
-                      typeof (renditionRef.current as { prev?: unknown }).prev === "function"
-                    ) {
-                      (renditionRef.current as { prev: () => void }).prev();
-                    }
-                  }}
-                  disabled={currentPage <= 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-
+              <div className="flex-1">
                 <Slider
                   value={[currentPage]}
-                  onValueChange={([v]) => {
-                    setCurrentPage(v);
-                  }}
                   min={1}
-                  max={totalPages}
+                  max={safeTotalPagesForUi}
                   step={1}
-                  className="flex-1"
-                  onClick={(e) => e.stopPropagation()}
+                  onValueChange={handleSliderChange}
+                  className="cursor-pointer"
+                  disabled={!totalPagesForUi || totalPagesForUi <= 1}
                 />
+              </div>
 
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (
-                      isEpub &&
-                      renditionRef.current &&
-                      typeof (renditionRef.current as { next?: unknown }).next === "function"
-                    ) {
-                      (renditionRef.current as { next: () => void }).next();
-                    } else {
-                      setCurrentPage((p) => Math.min(totalPages, p + 1));
-                    }
-                  }}
-                  disabled={currentPage >= totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </>
-            )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleNextPage}
+                disabled={!!totalPagesForUi && currentPage >= safeTotalPagesForUi}
+              >
+                <ChevronRight className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {/* Progress Info */}
+            <div className="grid grid-cols-3 items-center text-sm">
+              <span className="justify-self-start text-muted-foreground">
+                Trang {currentPage} / {safeTotalPagesForUi}
+              </span>
+
+              {/* Zoom controls (PDF only) - centered, no extra row */}
+              {isPdf ? (
+                <div className="justify-self-center">
+                  <div className="flex items-center gap-1">
+                    <PdfZoomOut>
+                      {(props) => (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          aria-label="Thu nhỏ"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            props.onClick();
+                          }}
+                        >
+                          <ZoomOutIcon className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </PdfZoomOut>
+
+                    <PdfZoomIn>
+                      {(props) => (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          aria-label="Phóng to"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            props.onClick();
+                          }}
+                        >
+                          <ZoomInIcon className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </PdfZoomIn>
+                  </div>
+                </div>
+              ) : (
+                <span />
+              )}
+
+              <span className="justify-self-end font-medium text-warm-pink">{progress}% hoàn thành</span>
+            </div>
           </div>
         </div>
-      </footer>
+      </div>
     </div>
   );
 };

@@ -61,19 +61,7 @@ import { useHighlights } from "@/hooks/useHighlights";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type TocRow = { chapter: number; title: string; page: number };
-
 type TocRowV2 = { label: string; title: string; page: number; depth: number };
-
-const demoToc: TocRowV2[] = [
-  { label: "I", title: "Mở đầu - Giấc mơ lặp lại", page: 1, depth: 0 },
-  { label: "II", title: "Người phụ nữ Gypsy", page: 15, depth: 0 },
-  { label: "III", title: "Gặp gỡ nhà vua", page: 35, depth: 0 },
-  { label: "IV", title: "Hành trình qua sa mạc", page: 65, depth: 0 },
-  { label: "V", title: "Oasis và tình yêu", page: 98, depth: 0 },
-  { label: "VI", title: "Nhà Giả Kim", page: 130, depth: 0 },
-  { label: "VII", title: "Kho báu thực sự", page: 195, depth: 0 },
-];
 
 const toRoman = (num: number) => {
   if (!Number.isFinite(num) || num <= 0) return "";
@@ -260,7 +248,7 @@ const BookDetail = () => {
   const tableOfContents = useMemo(() => {
     const normalized = normalizeTocItems(book?.toc);
     const flattened = flattenToc(normalized);
-    return flattened.length > 0 ? flattened : demoToc;
+    return flattened;
   }, [book?.toc]);
 
   const openEditDialog = () => {
@@ -608,7 +596,10 @@ const BookDetail = () => {
               <h2 className="text-xl font-bold text-foreground">Mục lục</h2>
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-              {tableOfContents.map((item, i) => {
+              {tableOfContents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Mục lục trống</p>
+              ) : (
+                tableOfContents.map((item, i) => {
                 const isCurrentChapter =
                   currentPage >= item.page &&
                   (i === tableOfContents.length - 1 || currentPage < tableOfContents[i + 1].page);
@@ -652,7 +643,8 @@ const BookDetail = () => {
                     <span className="text-sm text-muted-foreground">Trang {item.page}</span>
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
           </div>
         </div>

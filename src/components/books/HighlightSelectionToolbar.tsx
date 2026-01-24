@@ -64,25 +64,19 @@ export const TextSelectionToolbar = ({
   const [showToolbar, setShowToolbar] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState("vi");
 
+  const isValidSelectionRegion =
+    Number.isFinite(selectionRegion.left) &&
+    Number.isFinite(selectionRegion.top) &&
+    Number.isFinite(selectionRegion.width) &&
+    Number.isFinite(selectionRegion.height) &&
+    selectionRegion.width > 0 &&
+    selectionRegion.height > 0;
+
   const computePositionFromRect = (rect: DOMRect) => {
-    const toolbarWidth = 260;
-    const toolbarHeight = 44;
-    const half = toolbarWidth / 2;
-    const pad = 8;
-    const x = Math.min(
-      Math.max(rect.left + rect.width / 2, half + pad),
-      window.innerWidth - half - pad,
-    );
-
-    // Keep it close to the selection.
-    const below = rect.bottom + 4;
-    const minTop = 12;
-    const maxTop = Math.max(minTop, window.innerHeight - toolbarHeight - 12);
-    const above = rect.top - (toolbarHeight + 4);
-    const preferred = below + toolbarHeight > window.innerHeight ? above : below;
-    const y = Math.min(Math.max(preferred, minTop), maxTop);
-
-    return { x, y };
+    return {
+      x: Math.min(rect.left + rect.width / 2, window.innerWidth - 200),
+      y: rect.top - 50,
+    };
   };
 
   const pickRectFromRange = (range: Range): DOMRect | null => {
@@ -126,10 +120,19 @@ export const TextSelectionToolbar = ({
       // ignore
     }
 
-    // Fallback: approximate from provided selectionRegion
+    // Fallback (PDF viewer): anchor to the element placed at selectionRegion % so we
+    // get correct viewport coordinates even when the page is centered/narrower than the window.
+    const anchorRect = isValidSelectionRegion ? toolbarRef.current?.getBoundingClientRect() : null;
+    if (anchorRect && anchorRect.width > 0 && anchorRect.height > 0) {
+      setPosition(computePositionFromRect(anchorRect));
+      setShowToolbar(true);
+      return;
+    }
+
+    // Last-resort fallback: approximate from selectionRegion relative to viewport.
     setPosition({
       x: Math.min((selectionRegion.left / 100) * window.innerWidth, window.innerWidth - 16),
-      y: Math.max(((selectionRegion.top + selectionRegion.height) / 100) * window.innerHeight + 4, 12),
+      y: Math.max(((selectionRegion.top + selectionRegion.height) / 100) * window.innerHeight + 2, 12),
     });
     setShowToolbar(true);
   }, [selectedTextProp, selectionRegion.left, selectionRegion.top, selectionRegion.height]);
@@ -230,7 +233,21 @@ export const TextSelectionToolbar = ({
   const canTranslate = selectedText.length > 0;
 
   return (
-    <div ref={toolbarRef}>
+    <div
+      ref={toolbarRef}
+      style={
+        isValidSelectionRegion
+          ? {
+              position: "absolute",
+              left: `${selectionRegion.left}%`,
+              top: `${selectionRegion.top}%`,
+              width: `${selectionRegion.width}%`,
+              height: `${selectionRegion.height}%`,
+              pointerEvents: "none",
+            }
+          : undefined
+      }
+    >
       {showToolbar ? (
         <div
           className="flex items-center gap-2 rounded-md border border-border bg-background/95 px-2 py-1 shadow-sm"
@@ -240,6 +257,7 @@ export const TextSelectionToolbar = ({
             top: Math.max(position.y, 12),
             transform: "translateX(-50%)",
             zIndex: 100,
+            pointerEvents: "auto",
           }}
           onClick={(e) => e.stopPropagation()}
         >

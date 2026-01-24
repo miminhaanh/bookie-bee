@@ -4,7 +4,7 @@ import { useAuth } from "./useAuth";
 import type { Json } from "@/integrations/supabase/types";
 
 export type BookStatus = "reading" | "completed" | "to_read";
-export type BookFormat = "pdf" | "epub" | "txt";
+export type BookFormat = "pdf" | "txt";
 
 export interface TocItem {
   title: string;

@@ -9,7 +9,12 @@ import { BookShelf } from "@/components/dashboard/BookShelf";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 import type { BookStatus } from "@/hooks/useBooks";
+
+import { useReportsData } from "@/hooks/useReportsData";
 
 interface ReadingStats {
   totalBooks: number;
@@ -30,12 +35,7 @@ interface BookWithProgress {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState<ReadingStats>({
-    totalBooks: 0,
-    completedBooks: 0,
-    readingBooks: 0,
-    readingStreak: 0,
-  });
+  const { data: reportData } = useReportsData(); // Fetch real gamification data
   const [currentlyReading, setCurrentlyReading] = useState<BookWithProgress[]>([]);
   const [completedBooks, setCompletedBooks] = useState<BookWithProgress[]>([]);
   const [savedBooks, setSavedBooks] = useState<BookWithProgress[]>([]);
@@ -43,10 +43,29 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [profileDisplayName, setProfileDisplayName] = useState<string | null>(null);
+  const [stats, setStats] = useState<ReadingStats>({
+    totalBooks: 0,
+    completedBooks: 0,
+    readingBooks: 0,
+    readingStreak: 0,
+  });
+  const [hasSeenWelcomeBanner, setHasSeenWelcomeBanner] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    return localStorage.getItem('onboarding_done') !== 'true';
+  });
+
+  // Track per-account whether the in-dashboard welcome banner has been shown
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `welcome_banner_shown_${user.id}`;
+    const seen = localStorage.getItem(key) === 'true';
+    setHasSeenWelcomeBanner(seen);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) {
-      navigate("/auth", { replace: true });
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
       return;
     }
 
@@ -101,32 +120,17 @@ const Dashboard = () => {
     }
   };
 
-  // Demo data when no real books
-  const demoReadingBooks: BookWithProgress[] = [
-    { id: "1", title: "Nhà Giả Kim", author: "Paulo Coelho", cover_url: null, progress: 65, status: "reading" },
-    { id: "2", title: "Đắc Nhân Tâm", author: "Dale Carnegie", cover_url: null, progress: 30, status: "reading" },
-    { id: "3", title: "Tâm Lý Học Tội Phạm", author: "Nhiều tác giả", cover_url: null, progress: 15, status: "reading" },
-  ];
-
-  const demoCompletedBooks: BookWithProgress[] = [
-    { id: "4", title: "Sapiens", author: "Yuval Noah Harari", cover_url: null, progress: 100, status: "completed" },
-    { id: "5", title: "Atomic Habits", author: "James Clear", cover_url: null, progress: 100, status: "completed" },
-  ];
-
-  const demoSavedBooks: BookWithProgress[] = [
-    { id: "6", title: "The Alchemist", author: "Paulo Coelho", cover_url: null, progress: 0, status: "to_read" },
-    { id: "7", title: "Thinking, Fast and Slow", author: "Daniel Kahneman", cover_url: null, progress: 0, status: "to_read" },
-  ];
-
   const demoExploreBooks: BookWithProgress[] = [
     { id: "8", title: "Deep Work", author: "Cal Newport", cover_url: null, progress: 0, status: "to_read" },
     { id: "9", title: "7 Habits", author: "Stephen Covey", cover_url: null, progress: 0, status: "to_read" },
     { id: "10", title: "Zero to One", author: "Peter Thiel", cover_url: null, progress: 0, status: "to_read" },
   ];
 
-  const displayReadingBooks = currentlyReading.length > 0 ? currentlyReading : demoReadingBooks;
-  const displayCompletedBooks = completedBooks.length > 0 ? completedBooks : demoCompletedBooks;
-  const displaySavedBooks = savedBooks.length > 0 ? savedBooks : demoSavedBooks;
+  // Logic hiển thị: Nếu không có sách thật, KHÔNG hiển thị sách demo ở mục cá nhân.
+  // Chỉ hiển thị sách demo ở mục "Khám phá"
+  const displayReadingBooks = currentlyReading;
+  const displayCompletedBooks = completedBooks;
+  const displaySavedBooks = savedBooks;
 
   // Filter books based on search query
   const filterBooks = (books: BookWithProgress[]) => {
@@ -143,7 +147,7 @@ const Dashboard = () => {
 
   const booksForStats = hasAnyRealBooks
     ? [...currentlyReading, ...completedBooks, ...savedBooks]
-    : [...demoReadingBooks, ...demoCompletedBooks, ...demoSavedBooks];
+    : [];
 
   // Consider a book "read" if it's completed OR progress is near the end (98% - 100%).
   const booksReadCount = booksForStats.filter(
@@ -152,10 +156,76 @@ const Dashboard = () => {
 
   const totalBooksCount = booksForStats.length;
 
+  const handleWelcomeBannerClick = () => {
+    if (user?.id) {
+      const key = `welcome_banner_shown_${user.id}`;
+      localStorage.setItem(key, 'true');
+      setHasSeenWelcomeBanner(true);
+    }
+    navigate('/add-book');
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
+
+        {/* Onboarding Dialog for new users */}
+        {showOnboarding && !hasAnyRealBooks && (
+          <Dialog open={true} onOpenChange={(open) => {
+            if (!open) {
+              localStorage.setItem('onboarding_done', 'true');
+              setShowOnboarding(false);
+            }
+          }}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-2xl flex items-center gap-2">
+                  <span>🎉</span>
+                  Chào mừng đến với Bookie Bee!
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">📚</div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-lg mb-1">Bước 1: Thêm sách của bạn</p>
+                    <p className="text-sm text-muted-foreground">Tải lên file PDF hoặc EPUB để bắt đầu đọc</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">📖</div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-lg mb-1">Bước 2: Bắt đầu đọc</p>
+                    <p className="text-sm text-muted-foreground">Tiến độ sẽ tự động được lưu</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="text-3xl">✨</div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-lg mb-1">Bước 3: Highlight & ghi chú</p>
+                    <p className="text-sm text-muted-foreground">Lưu lại những đoạn yêu thích</p>
+                  </div>
+                </div>
+                <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+                  <p className="text-sm text-orange-800 dark:text-orange-300">
+                    <span className="font-semibold">👉 Lưu ý:</span> Các sách bên dưới chỉ là mẫu. Bắt đầu thêm sách của bạn để trải nghiệm đọc sách thú vị nhé!
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => {
+                  localStorage.setItem('onboarding_done', 'true');
+                  setShowOnboarding(false);
+                  navigate('/add-book');
+                }} className="w-full gap-2">
+                  <Plus className="w-4 h-4" />
+                  Bắt đầu thêm sách
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
         {/* Main Content */}
         <main className="flex-1 flex flex-col min-h-screen">
@@ -175,13 +245,13 @@ const Dashboard = () => {
                 <div className="grid lg:grid-cols-3 gap-6">
                   {/* Profile Card - Takes 2 columns on large screens */}
                   <div className="lg:col-span-2">
-                          <ProfileCard
-                            level={5}
-                            xp={350}
-                            xpToNextLevel={500}
-                            avatarUrl={profileAvatarUrl}
-                            displayName={profileDisplayName}
-                          />
+                    <ProfileCard
+                      level={reportData?.level.currentLevel ?? 1}
+                      xp={reportData?.level.currentXP ?? 0}
+                      xpToNextLevel={reportData?.level.totalXPForNextLevel ?? 500}
+                      avatarUrl={profileAvatarUrl}
+                      displayName={profileDisplayName}
+                    />
                   </div>
 
                   {/* Stats Cards */}
@@ -198,6 +268,53 @@ const Dashboard = () => {
               {/* Toolbar Section */}
               <section className="mb-8">
                 <DashboardToolbar onSearch={setSearchQuery} />
+
+                {/* Welcome banner for new users (only show once per account/browser) */}
+                {!hasAnyRealBooks && !searchQuery && !hasSeenWelcomeBanner && (
+                  <div className="mt-4 p-6 rounded-2xl bg-gradient-to-r from-warm-pink/20 to-coral/20 border-2 border-warm-pink/30">
+                    <div className="flex items-start gap-4">
+                      <div className="text-4xl">👋</div>
+                      <div className="flex-1">
+                        <h3 className="text-lg font-bold mb-2">Chào mừng đến với Bookie Bee!</h3>
+                        <p className="text-sm text-muted-foreground mb-3">
+                          Các sách bên dưới chỉ là mẫu. Bắt đầu thêm sách của bạn để trải nghiệm đọc sách thú vị nhé! 📚
+                        </p>
+                        <Button onClick={handleWelcomeBannerClick} className="gap-2">
+                          <Plus className="w-4 h-4" />
+                          Thêm sách đầu tiên của bạn
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Search results feedback */}
+                {searchQuery && (
+                  <div className="mt-4 p-4 bg-muted/50 rounded-xl">
+                    <p className="text-sm">
+                      {(() => {
+                        const totalResults =
+                          filterBooks(displayReadingBooks).length +
+                          filterBooks(displayCompletedBooks).length +
+                          filterBooks(displaySavedBooks).length;
+                        return totalResults > 0
+                          ? `🔍 Tìm thấy ${totalResults} kết quả cho "${searchQuery}"`
+                          : `😔 Không tìm thấy sách nào cho "${searchQuery}"`;
+                      })()}
+                    </p>
+                    {filterBooks(displayReadingBooks).length +
+                      filterBooks(displayCompletedBooks).length +
+                      filterBooks(displaySavedBooks).length === 0 && (
+                        <Button
+                          variant="link"
+                          className="mt-2 p-0 h-auto text-primary"
+                          onClick={() => setSearchQuery("")}
+                        >
+                          Xóa tìm kiếm
+                        </Button>
+                      )}
+                  </div>
+                )}
               </section>
 
               {/* Book Shelves */}

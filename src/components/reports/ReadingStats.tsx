@@ -87,7 +87,8 @@ export const ReadingStats = ({ hourlyData, weeklyData, readerType }: ReadingStat
                   borderRadius: '12px',
                   boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
                 }}
-                formatter={(value: number) => [`${value} phút`, 'Thời gian đọc']}
+                // formatter removed minutes display
+                formatter={() => ['']}
                 labelFormatter={(label) => `${label}:00`}
               />
               <Area
@@ -132,7 +133,7 @@ export const ReadingStats = ({ hourlyData, weeklyData, readerType }: ReadingStat
                   borderRadius: '12px',
                   boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
                 }}
-                formatter={(value: number) => [`${value} trang`, 'Đã đọc']}
+                formatter={(value: number) => [`${value} trang`, '']}
               />
               <Bar dataKey="pages" radius={[8, 8, 0, 0]}>
                 {weeklyData.map((entry, index) => (

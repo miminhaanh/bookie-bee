@@ -1,238 +1,119 @@
-import { useState, useRef, useEffect } from "react";
+import { motion } from "framer-motion";
+import { User, Mail, Lock, Link as LinkIcon, Camera, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, Loader2, Check, Key, Link2, Mail, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { useProfile } from "@/hooks/useProfile";
-import { useAvatarUpload } from "@/hooks/useAvatarUpload";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const ProfileSettings = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { profile, updateProfile } = useProfile();
-  const { uploadAvatar, isUploading } = useAvatarUpload();
-  const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [displayName, setDisplayName] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-
-  // Password dialog
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-
-  useEffect(() => {
-    if (profile) {
-      setDisplayName(profile.display_name || "");
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    const changed = displayName !== (profile?.display_name || "");
-    setHasChanges(changed);
-  }, [displayName, profile]);
-
-  const initials = (profile?.display_name || user?.email || "U").slice(0, 2).toUpperCase();
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) await uploadAvatar(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
-
-  const handleSave = async () => {
-    setIsSubmitting(true);
-    try {
-      await updateProfile.mutateAsync({
-        display_name: displayName.trim() || null,
-      });
-      toast({ title: "Đã lưu! 🐝" });
-      setHasChanges(false);
-    } catch {
-      toast({ title: "Lỗi", variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (newPassword !== confirmPassword) {
-      toast({ title: "Mật khẩu không khớp", variant: "destructive" });
-      return;
-    }
-    if (newPassword.length < 6) {
-      toast({ title: "Mật khẩu tối thiểu 6 ký tự", variant: "destructive" });
-      return;
-    }
-    setIsChangingPassword(true);
-    try {
-      await supabase.auth.updateUser({ password: newPassword });
-      toast({ title: "Đã đổi mật khẩu! 🔐" });
-      setShowPasswordDialog(false);
-      setNewPassword("");
-      setConfirmPassword("");
-    } catch {
-      toast({ title: "Lỗi", variant: "destructive" });
-    } finally {
-      setIsChangingPassword(false);
-    }
-  };
+  // Mock data for display since user might be null or have limited data
+  const displayName = user?.user_metadata?.full_name || "Ong chăm chỉ";
+  const email = user?.email || "member@bookiebee.com";
 
   return (
-    <DashboardLayout mobileTitle="Hồ sơ">
-      <div className="min-h-screen bg-gradient-to-br from-soft-pink/20 via-cream to-peach/20">
-      {/* Header */}
-      <header className="sticky top-16 lg:top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border/30">
-        <div className="flex items-center gap-3 px-4 py-3">
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-muted/50 rounded-lg">
+    <DashboardLayout>
+      <div className="max-w-3xl mx-auto pb-10 px-4 md:px-8">
+        {/* Header Navigation */}
+        <div className="flex items-center gap-4 mb-8 mt-4 md:mt-8">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/settings")}
+            className="rounded-xl hover:bg-slate-100 text-slate-500"
+          >
             <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-base font-bold">👤 Thông tin cá nhân</h1>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-nunito font-bold text-slate-800">
+              Hồ sơ của bạn
+            </h1>
+            <p className="text-slate-500 text-sm font-medium">
+              Quản lý thông tin định danh trên Bookie Bee
+            </p>
+          </div>
         </div>
-      </header>
 
-      <main className="px-4 py-4 space-y-3">
-        {/* Avatar */}
-        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            accept="image/*"
-            className="hidden"
-          />
-          <div className="flex items-center gap-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Avatar Section */}
+          <div className="relative group flex flex-col items-center justify-center py-10 rounded-3xl bg-gradient-to-br from-blue-50 to-white border border-white/60 shadow-sm overflow-hidden">
+            {/* Ambient Glow */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-primary/20 blur-[80px] rounded-full" />
+
             <div className="relative">
-              <Avatar className="h-16 w-16 border-2 border-warm-pink/30">
-                <AvatarImage src={profile?.avatar_url || undefined} />
-                <AvatarFallback className="bg-soft-pink/50 text-warm-pink font-bold text-lg">
-                  {initials}
+              <Avatar className="w-32 h-32 border-4 border-white shadow-xl">
+                <AvatarImage src={user?.user_metadata?.avatar_url} />
+                <AvatarFallback className="text-4xl bg-gradient-pink text-white">
+                  {displayName.charAt(0).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-warm-pink text-white flex items-center justify-center shadow-md"
-              >
-                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+              <button className="absolute bottom-1 right-1 p-2 rounded-full bg-slate-800 text-white shadow-lg hover:scale-110 transition-transform">
+                <Camera className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1">
-              <p className="font-semibold">{profile?.display_name || "Chưa đặt tên"}</p>
-              <p className="text-xs text-muted-foreground">Bấm vào ảnh để thay đổi</p>
+
+            <div className="mt-4 text-center">
+              <h2 className="text-xl font-bold text-slate-800">{displayName}</h2>
+              <p className="text-slate-500 text-sm font-medium">@{email.split('@')[0]}</p>
             </div>
           </div>
-        </div>
 
-        {/* Form Fields */}
-        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30 space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5" /> Tên hiển thị
-            </label>
-            <Input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Nhập tên của bạn"
-              className="h-10 rounded-xl bg-muted/30 border-0"
-            />
+          {/* Information Cards */}
+          <div className="grid gap-4">
+            <div className="p-4 rounded-2xl bg-white/60 border border-white/50 shadow-sm flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600">
+                <Mail className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Email</p>
+                <p className="text-slate-700 font-medium">{email}</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/60 border border-white/50 shadow-sm flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase">Username</p>
+                <p className="text-slate-700 font-medium">@{email.split('@')[0]}</p>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5" /> Email
-            </label>
-            <Input
-              value={user?.email || ""}
-              disabled
-              className="h-10 rounded-xl bg-muted/50 border-0 text-muted-foreground"
-            />
-          </div>
-        </div>
-
-        {/* Password & Social */}
-        <div className="bg-card/60 backdrop-blur-sm rounded-2xl p-4 border border-border/30 space-y-2">
-          <button
-            onClick={() => setShowPasswordDialog(true)}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-          >
-            <span className="text-sm flex items-center gap-2">
-              <Key className="w-4 h-4 text-warm-pink" /> Đổi mật khẩu
-            </span>
-            <span className="text-xs text-muted-foreground">••••••••</span>
-          </button>
-
-          <button className="w-full flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
-            <span className="text-sm flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-warm-pink" /> Liên kết mạng xã hội
-            </span>
-            <span className="text-xs text-muted-foreground">Chưa liên kết</span>
-          </button>
-        </div>
-      </main>
-
-      {/* Save Button */}
-      {hasChanges && (
-        <div className="fixed bottom-6 left-4 right-4 z-40 md:left-[calc(var(--sidebar-width)+1.5rem)] md:right-6">
-          <Button
-            onClick={handleSave}
-            disabled={isSubmitting}
-            className="w-full h-11 rounded-2xl bg-gradient-to-r from-warm-pink to-coral shadow-lg font-semibold"
-          >
-            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
-            Lưu thay đổi 🐝
-          </Button>
-        </div>
-      )}
-
-      {/* Password Dialog */}
-      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-        <DialogContent className="rounded-2xl max-w-sm mx-4">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Key className="w-5 h-5 text-warm-pink" /> Đổi mật khẩu
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-2">
-            <Input
-              type="password"
-              placeholder="Mật khẩu mới"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="h-11 rounded-xl"
-            />
-            <Input
-              type="password"
-              placeholder="Xác nhận mật khẩu"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="h-11 rounded-xl"
-            />
+          {/* Action Buttons */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
             <Button
-              onClick={handleChangePassword}
-              disabled={isChangingPassword}
-              className="w-full h-11 rounded-xl bg-gradient-to-r from-warm-pink to-coral"
+              variant="outline"
+              className="h-14 justify-start px-4 rounded-2xl border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold gap-3"
             >
-              {isChangingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : "Xác nhận"}
+              <Lock className="w-5 h-5 text-slate-400" />
+              Đổi mật khẩu
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-14 justify-start px-4 rounded-2xl border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold gap-3"
+            >
+              <LinkIcon className="w-5 h-5 text-slate-400" />
+              Liên kết mạng xã hội
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
 
+          <div className="text-center pt-8">
+            <p className="text-xs font-bold text-slate-300 uppercase tracking-widest">
+              Thành viên từ 2024
+            </p>
+          </div>
+        </motion.div>
       </div>
     </DashboardLayout>
   );

@@ -166,6 +166,7 @@ const Reader = () => {
   const [isEpub, setIsEpub] = useState(false);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [epubBlobUrl, setEpubBlobUrl] = useState<string | null>(null);
   const [hasVisitedPage, setHasVisitedPage] = useState(false);
   const [deletingHighlightId, setDeletingHighlightId] = useState<string | null>(null);
   const [pageHighlights, setPageHighlights] = useState<DbHighlight[]>([]);
@@ -595,7 +596,7 @@ const Reader = () => {
   }, [location.search]);
 
   const denomForProgress = isPdf && numPages ? numPages : totalPages;
-  const { hydratedPage } = useSaveReadingProgress({
+  const { hydratedPage, saveNow, isHydrated } = useSaveReadingProgress({
     bookId: id,
     enabled: !!user?.id && !!id,
     currentPage,
@@ -608,6 +609,19 @@ const Reader = () => {
       setCurrentPage(page);
     },
   });
+  
+  // Fix Bug #6: Lưu progress trước khi đóng trang
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Lưu ngay trước khi đóng
+      if (isHydrated && currentPage > 0) {
+        saveNow(currentPage);
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentPage, saveNow, isHydrated]);
 
   const handlePdfDocumentLoad = useCallback(
     (e: DocumentLoadEvent) => {
@@ -673,14 +687,74 @@ const Reader = () => {
 
   useEffect(() => {
     if (!shouldRedirectToAuth) return;
-    navigate("/auth", { replace: true });
+    const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+    navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
   }, [navigate, shouldRedirectToAuth]);
 
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let abort = false;
+
+    const tryFetch = async () => {
+      if (!fileUrl) return;
+      
+      const ext = fileUrl.split(".").pop()?.toLowerCase();
+      const isPdfFile = ext === "pdf";
+      const isEpubFile = ext === "epub";
+      
+      if (!isPdfFile && !isEpubFile) return;
+
+      try {
+        const isAbsolute = /^https?:\/\//i.test(fileUrl);
+        let blob: Blob;
+
+        if (!isAbsolute) {
+          // Prefer downloading via Supabase Storage API (works for private buckets and avoids signed URL expiry)
+          const { data, error } = await supabase.storage.from("book-files").download(fileUrl);
+          if (error) throw error;
+          blob = data;
+        } else {
+          // If it's already an absolute URL or signed/public URL flow above didn't return, fetch and create blob URL
+          const res = await fetch(fileUrl, { credentials: "include" });
+          if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
+          blob = await res.blob();
+        }
+
+        objectUrl = URL.createObjectURL(blob);
+        if (!abort) {
+          if (isPdfFile) setPdfBlobUrl(objectUrl);
+          if (isEpubFile) setEpubBlobUrl(objectUrl);
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("File prefetch failed:", err);
+      }
+    };
+
+    tryFetch();
+
+    return () => {
+      abort = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [fileUrl]);
+  
   // Initialize EPUB rendering when needed
   useEffect(() => {
-    if (!isEpub || !fileUrl || !epubRef.current) return;
+    if (!isEpub || !epubRef.current) return;
+    
+    // Prefer blob URL (prefetched) over raw URL to handle auth/CORS
+    const urlToUse = epubBlobUrl || fileUrl;
+    if (!urlToUse) return;
 
-    const bookObj = ePub(fileUrl);
+    // Clean up previous instance first if needed
+    if (bookRef.current) {
+        try {
+           (bookRef.current as unknown as { destroy: () => void }).destroy();
+        } catch { /* ignore */ }
+    }
+
+    const bookObj = ePub(urlToUse);
     bookRef.current = bookObj;
     const rendition = bookObj.renderTo(epubRef.current, {
       width: "100%",
@@ -690,8 +764,10 @@ const Reader = () => {
     rendition.display();
     renditionRef.current = rendition;
 
-    const onRelocated = () => {
-      // We don't know exact page count for EPUB easily; navigation buttons call rendition.prev/next
+    const onRelocated = (location: any) => {
+       // Save location for progress tracking if needed
+       // Note: EPUB pages are fluid, so page numbers are approximate or location based.
+       // Location format: cfi strings.
     };
 
     rendition.on("relocated", onRelocated);
@@ -706,103 +782,7 @@ const Reader = () => {
         // ignore
       }
     };
-  }, [isEpub, fileUrl]);
-
-  // Load EPUB table of contents on demand
-  useEffect(() => {
-    if (!isTocOpen) return;
-    if (!isEpub) return;
-    if (epubToc.length > 0) return;
-    if (!bookRef.current) return;
-
-    let cancelled = false;
-    setIsEpubTocLoading(true);
-
-    const run = async () => {
-      try {
-        const bookObj = bookRef.current as unknown as {
-          loaded?: { navigation?: Promise<unknown> };
-          navigation?: { toc?: unknown[] };
-        };
-
-        // epubjs exposes navigation either via loaded.navigation or book.navigation
-        if (bookObj.loaded?.navigation) {
-          await bookObj.loaded.navigation;
-        }
-
-        const rawToc = (bookObj.navigation as { toc?: unknown[] } | undefined)?.toc;
-        const normalize = (items: unknown[]): EpubTocItem[] => {
-          return items
-            .map((it) => {
-              const x = it as { label?: string; href?: string; subitems?: unknown[]; subitems2?: unknown[] };
-              const children = Array.isArray(x.subitems)
-                ? x.subitems
-                : Array.isArray(x.subitems2)
-                  ? x.subitems2
-                  : [];
-              return {
-                label: String(x.label ?? ""),
-                href: x.href,
-                subitems: children.length ? normalize(children) : [],
-              } satisfies EpubTocItem;
-            })
-            .filter((x) => x.label.trim().length > 0);
-        };
-
-        const toc = Array.isArray(rawToc) ? normalize(rawToc) : [];
-        if (!cancelled) setEpubToc(toc);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn("Failed to load EPUB TOC:", err);
-        if (!cancelled) setEpubToc([]);
-      } finally {
-        if (!cancelled) setIsEpubTocLoading(false);
-      }
-    };
-
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [epubToc.length, isEpub, isTocOpen]);
-
-  // Try to prefetch PDF into a blob URL to avoid CORS/authorization issues when loading in <Document />
-  useEffect(() => {
-    let objectUrl: string | null = null;
-    let abort = false;
-
-    const tryFetch = async () => {
-      if (!isPdf || !fileUrl) return;
-      try {
-        const isAbsolute = /^https?:\/\//i.test(fileUrl);
-        if (!isAbsolute) {
-          // Prefer downloading via Supabase Storage API (works for private buckets and avoids signed URL expiry)
-          const { data, error } = await supabase.storage.from("book-files").download(fileUrl);
-          if (error) throw error;
-          objectUrl = URL.createObjectURL(data);
-          if (!abort) setPdfBlobUrl(objectUrl);
-          return;
-        }
-
-        // If it's already an absolute URL or signed/public URL flow above didn't return, fetch and create blob URL
-        const res = await fetch(fileUrl, { credentials: "include" });
-        if (!res.ok) throw new Error(`fetch failed: ${res.status}`);
-        const blob = await res.blob();
-        objectUrl = URL.createObjectURL(blob);
-        if (!abort) setPdfBlobUrl(objectUrl);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn("PDF prefetch failed, will try direct URL in <Document>:", err);
-      }
-    };
-
-    tryFetch();
-
-    return () => {
-      abort = true;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [isPdf, fileUrl]);
+  }, [isEpub, fileUrl, epubBlobUrl]);
 
   // Cleanup on unmount: clear timeout and revoke blob URL
   useEffect(() => {
@@ -929,14 +909,16 @@ const Reader = () => {
         <div className="flex items-center justify-between px-2 py-1.5">
           <Button 
             variant="ghost" 
-            size="icon"
+            size="sm"
             onClick={(e) => {
               e.stopPropagation();
               endSession();
-              navigate(-1);
+              navigate(`/book/${id}`);
             }}
+            className="gap-1.5"
           >
             <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Quay lại</span>
           </Button>
           
           <h1 className="text-sm font-medium truncate max-w-[200px]">

@@ -9,12 +9,12 @@ interface HoneycombStreakProps {
   freezesAvailable: number;
 }
 
-const HexCell = ({ 
-  filled, 
-  index, 
-  onFill 
-}: { 
-  filled: boolean; 
+const HexCell = ({
+  filled,
+  index,
+  onFill
+}: {
+  filled: boolean;
   index: number;
   onFill?: () => void;
 }) => {
@@ -34,7 +34,7 @@ const HexCell = ({
 
   // Hình dáng lục giác chuẩn
   const hexPath = "M54 6 L88 25 Q95 29 95 38 V62 Q95 71 88 75 L54 94 Q50 96 46 94 L12 75 Q5 71 5 62 V38 Q5 29 12 25 L46 6 Q50 4 54 6 Z";
-  
+
   const isActive = filled || justFilled;
 
   return (
@@ -44,7 +44,7 @@ const HexCell = ({
           <motion.div
             className="absolute z-20 text-3xl"
             initial={{ x: -60, y: -40, opacity: 0, rotate: -20, scale: 0.5 }}
-            animate={{ 
+            animate={{
               x: [null, 10, 20, 80],
               y: [null, 0, 10, -40],
               opacity: [0, 1, 1, 0],
@@ -57,7 +57,7 @@ const HexCell = ({
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       <svg
         viewBox="0 0 100 100"
         className="w-full h-full cursor-pointer transition-transform hover:scale-110 duration-300"
@@ -73,24 +73,24 @@ const HexCell = ({
 
           {/* Gradient cho Vỏ Ngoài: Kem trắng ngà */}
           <linearGradient id={`shell-gradient-${index}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="#FEF3C7" /> 
+            <stop offset="0%" stopColor="#FEF3C7" />
             <stop offset="100%" stopColor="#FDE68A" />
           </linearGradient>
 
-           {/* Gradient cho Ô Trống: Xám nhạt */}
-           <linearGradient id={`empty-gradient-${index}`} x1="0%" y1="0%" x2="0%" y2="100%">
+          {/* Gradient cho Ô Trống: Xám nhạt */}
+          <linearGradient id={`empty-gradient-${index}`} x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="#F3F4F6" />
             <stop offset="100%" stopColor="#E5E7EB" />
           </linearGradient>
         </defs>
-        
+
         {/* --- LAYER 1: VỎ NGOÀI (OUTER SHELL) --- */}
         <motion.path
           d={hexPath}
           // Nếu active: Màu kem. Nếu không: Màu xám.
           fill={isActive ? `url(#shell-gradient-${index})` : `url(#empty-gradient-${index})`}
           // Viền vàng khi active, xám đậm khi chưa
-          stroke={isActive ? "#FCD34D" : "#D1D5DB"} 
+          stroke={isActive ? "#FCD34D" : "#D1D5DB"}
           strokeWidth="10"
           strokeLinejoin="round"
           initial={false}
@@ -99,15 +99,15 @@ const HexCell = ({
         {/* --- LAYER 2: VIỀN TRONG (INNER RIM - WHITE) --- 
             Tạo hiệu ứng cái bát sâu xuống */}
         {isActive && (
-           <path
-             d={hexPath}
-             fill="none"
-             stroke="#FFFFFF"
-             strokeWidth="4"
-             strokeOpacity="0.8"
-             transform="scale(0.82)"
-             style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-           />
+          <path
+            d={hexPath}
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth="4"
+            strokeOpacity="0.8"
+            transform="scale(0.82)"
+            style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
+          />
         )}
 
         {/* --- LAYER 3: LÕI MẬT (HONEY CORE) --- */}
@@ -126,44 +126,44 @@ const HexCell = ({
         )}
 
         {/* --- LAYER 4: HIGHLIGHTS (BÓNG KÍNH HOẠT HÌNH) --- */}
-        
-        
+
+
         {/* Highlight 2: Hình bầu dục nghiêng trên lõi mật */}
         {isActive && (
-             <motion.ellipse
-             cx="36" // Lệch trái một chút so với tâm (50)
-             cy="40" // Lệch lên trên một chút so với tâm (50)
-             rx="8"
-             ry="5"
-             fill="white"
-             opacity="0.8"
-             transform="rotate(-50 38 38)" // Xoay nghiêng 45 độ quanh tâm chính nó
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 0.8 }}
-             transition={{ delay: 0.2 }}
-           />
+          <motion.ellipse
+            cx="36" // Lệch trái một chút so với tâm (50)
+            cy="40" // Lệch lên trên một chút so với tâm (50)
+            rx="8"
+            ry="5"
+            fill="white"
+            opacity="0.8"
+            transform="rotate(-50 38 38)" // Xoay nghiêng 45 độ quanh tâm chính nó
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.8 }}
+            transition={{ delay: 0.2 }}
+          />
         )}
 
         {isActive && (
-             <motion.ellipse
-             cx="20" // Lệch trái một chút so với tâm (50)
-             cy="34" // Lệch lên trên một chút so với tâm (50)
-             rx="5.5"
-             ry="3.5"
-             fill="white"
-             opacity="0.4"
-             transform="rotate(-90 38 38)" // Xoay nghiêng 45 độ quanh tâm chính nó
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 0.8 }}
-             transition={{ delay: 0.2 }}
-           />
+          <motion.ellipse
+            cx="20" // Lệch trái một chút so với tâm (50)
+            cy="34" // Lệch lên trên một chút so với tâm (50)
+            rx="5.5"
+            ry="3.5"
+            fill="white"
+            opacity="0.4"
+            transform="rotate(-90 38 38)" // Xoay nghiêng 45 độ quanh tâm chính nó
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.8 }}
+            transition={{ delay: 0.2 }}
+          />
         )}
       </svg>
-      
+
       {/* Số thứ tự ngày (Chỉ hiện khi chưa fill) */}
       {!filled && !justFilled && (
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground/40 select-none pointer-events-none">
-            {index + 1}
+          {index + 1}
         </div>
       )}
     </div>
@@ -180,7 +180,7 @@ export const HoneycombStreak = ({ streakDays, currentStreak, freezesAvailable }:
   ];
 
   return (
-    <div className="bg-white/60 backdrop-blur-md border border-white/50 rounded-3xl p-6 shadow-sm">
+    <div className="bg-white/60 backdrop-blur-md border border-white/50 rounded-3xl p-8 shadow-sm overflow-hidden relative">
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center border border-amber-100 shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
@@ -189,31 +189,31 @@ export const HoneycombStreak = ({ streakDays, currentStreak, freezesAvailable }:
           <div>
             <h2 className="text-xl font-bold text-slate-800">Tổ Ong Chuyên Cần</h2>
             <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Chuỗi hiện tại</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200">
-                    {currentStreak} ngày
-                </span>
+              <span className="text-xs text-slate-500 font-medium uppercase tracking-wider">Chuỗi hiện tại</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200">
+                {currentStreak} ngày
+              </span>
             </div>
           </div>
         </div>
-        
+
         <Button variant="ghost" size="sm" className="gap-2 bg-blue-50/50 text-blue-600 hover:bg-blue-50 hover:text-blue-700 border border-blue-100/50">
           <Snowflake className="w-4 h-4" />
           <span className="font-bold">{freezesAvailable}</span>
         </Button>
       </div>
 
-      <div className="flex flex-col items-center pl-3">
+      <div className="flex flex-col items-center justify-center w-full py-4">
         {rows.map((row, rowIndex) => (
           <div
             key={rowIndex}
-            className="flex"
-            style={{ 
-                // Điều chỉnh offset cho hàng chẵn/lẻ để khớp tổ ong
-                // Width = 54 -> Half width = 27. Margin left ~27px để so le.
-                marginLeft: rowIndex % 2 === 1 ? 60 : 0, 
-                marginBottom: 0 // Âm margin để các hàng khít vào nhau theo chiều dọc
-            }} 
+            className="flex justify-center"
+            style={{
+              // Fix alignment: Odd rows need to be offset by half a hex width (approx 28px)
+              // Width = 54px + 4px margin = 58px. Half = 29px.
+              transform: rowIndex % 2 === 1 ? 'translateX(29px)' : 'none',
+              marginBottom: -16 // Nesting tightly
+            }}
           >
             {row.map((filled, cellIndex) => (
               <HexCell
@@ -226,13 +226,13 @@ export const HoneycombStreak = ({ streakDays, currentStreak, freezesAvailable }:
         ))}
       </div>
 
-      <div className="mt-8 flex items-center justify-center gap-8 text-xs font-medium text-slate-500">
+      <div className="mt-12 flex items-center justify-center gap-8 text-sm font-medium text-slate-500 pb-2">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-amber-400 border border-amber-500" />
+          <div className="w-4 h-4 rounded-full bg-amber-400 border border-amber-500 shadow-sm" />
           <span>Đã lấp đầy</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-slate-200 border border-slate-300" />
+          <div className="w-4 h-4 rounded-full bg-slate-200 border border-slate-300 shadow-sm" />
           <span>Chưa đến</span>
         </div>
       </div>

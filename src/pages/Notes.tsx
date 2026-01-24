@@ -49,7 +49,8 @@ const Notes = () => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate("/auth", { replace: true });
+      const returnUrl = encodeURIComponent('/notes');
+      navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
     }
   }, [authLoading, user, navigate]);
 

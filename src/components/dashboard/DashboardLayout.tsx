@@ -6,6 +6,8 @@ type DashboardLayoutProps = PropsWithChildren<{
   mobileTitle?: string;
 }>;
 
+import AdPopup from "@/components/common/AdPopup";
+
 export default function DashboardLayout({ children, mobileTitle = "Bookie Bee" }: DashboardLayoutProps) {
   return (
     <SidebarProvider>
@@ -22,6 +24,7 @@ export default function DashboardLayout({ children, mobileTitle = "Bookie Bee" }
           </header>
 
           <div className="flex-1 overflow-auto">{children}</div>
+          <AdPopup />
         </main>
       </div>
     </SidebarProvider>

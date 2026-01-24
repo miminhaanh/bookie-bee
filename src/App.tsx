@@ -19,6 +19,7 @@ import PrivacySettings from "./pages/settings/PrivacySettings";
 import NotificationSettings from "./pages/settings/NotificationSettings";
 import DataSettings from "./pages/settings/DataSettings";
 import Reports from "./pages/Report";
+import Feedback from "./pages/Feedback";
 
 
 const queryClient = new QueryClient();
@@ -37,6 +38,8 @@ const App = () => (
             <Route path="/notes" element={<Notes />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/community" element={<Community />} />
+            <Route path="/help" element={<Feedback />} />
+
             <Route path="/settings" element={<Settings />} />
             <Route path="/settings/profile" element={<ProfileSettings />} />
             <Route path="/settings/reading" element={<ReadingSettings />} />

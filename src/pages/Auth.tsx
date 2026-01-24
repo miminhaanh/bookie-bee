@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,11 @@ const Auth = () => {
   
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  
+  // Lấy returnUrl từ query params để redirect sau khi login
+  const returnUrl = new URLSearchParams(location.search).get('returnUrl') || '/';
 
   // Redirect if already logged in
   useEffect(() => {
@@ -46,6 +50,29 @@ const Auth = () => {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+  
+  const validateEmail = (value: string) => {
+    if (!value) {
+      setErrors(prev => ({ ...prev, email: undefined }));
+      return;
+    }
+    const result = emailSchema.safeParse(value);
+    setErrors(prev => ({
+      ...prev,
+      email: result.success ? undefined : result.error.issues[0]?.message
+    }));
+  };
+  
+  const validatePassword = (value: string) => {
+    if (!value) {
+      setErrors(prev => ({ ...prev, password: undefined }));
+      return;
+    }
+    const result = passwordSchema.safeParse(value);
+    const message = result.success ? undefined : result.error.issues[0]?.message;
+    
+    setErrors(prev => ({ ...prev, password: message }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,7 +138,7 @@ const Auth = () => {
           });
           // Wait for animation then navigate
           setTimeout(() => {
-            navigate("/", { replace: true });
+            navigate(returnUrl, { replace: true });
           }, 1500);
         }
       }
@@ -190,9 +217,12 @@ const Auth = () => {
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
-                    setErrors((prev) => ({ ...prev, email: undefined }));
+                    validateEmail(e.target.value);
                   }}
-                  className="pl-11 h-12 rounded-xl bg-muted/50 border-border/50 font-nunito"
+                  onBlur={() => validateEmail(email)}
+                  className={`pl-11 h-12 rounded-xl bg-muted/50 border-border/50 font-nunito ${
+                    errors.email ? 'border-destructive focus-visible:ring-destructive' : ''
+                  }`}
                 />
               </div>
               {errors.email && (
@@ -213,9 +243,12 @@ const Auth = () => {
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
-                    setErrors((prev) => ({ ...prev, password: undefined }));
+                    validatePassword(e.target.value);
                   }}
-                  className="pl-11 pr-11 h-12 rounded-xl bg-muted/50 border-border/50 font-nunito"
+                  onBlur={() => validatePassword(password)}
+                  className={`pl-11 pr-11 h-12 rounded-xl bg-muted/50 border-border/50 font-nunito ${
+                    errors.password ? 'border-destructive focus-visible:ring-destructive' : ''
+                  }`}
                 />
                 <button
                   type="button"

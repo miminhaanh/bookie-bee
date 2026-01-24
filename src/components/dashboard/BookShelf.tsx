@@ -66,7 +66,8 @@ export function BookShelf({
             {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
           </div>
         </div>
-        {showViewAll && (
+        {/* Temporarily hide "View All" button as /library route doesn't exist yet */}
+        {showViewAll && false && (
           <Button 
             variant="ghost" 
             size="sm" 

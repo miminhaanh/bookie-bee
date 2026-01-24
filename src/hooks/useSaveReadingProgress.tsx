@@ -28,14 +28,14 @@ export function useSaveReadingProgress({
 }: UseSaveReadingProgressParams) {
   const { user } = useAuth();
   const [hydratedPage, setHydratedPage] = useState<number | null>(null);
-  
+
   // 1. THÊM STATE NÀY: Cờ đánh dấu đã tải xong dữ liệu cũ từ DB chưa
   const [isHydrated, setIsHydrated] = useState(false);
 
   const lastSavedPageRef = useRef<number | null>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedOnceRef = useRef(false);
-  
+
   const latestPageRef = useRef(currentPage);
 
   const canRun = !!enabled && !!user?.id && !!bookId;
@@ -55,7 +55,6 @@ export function useSaveReadingProgress({
 
   const saveNow = useCallback(
     (page: number) => {
-      // 2. SỬA QUAN TRỌNG: Nếu chưa hydrate xong (isHydrated === false), TUYỆT ĐỐI KHÔNG LƯU
       // Điều này ngăn việc trang 1 (mặc định) ghi đè lên trang 50 (trong DB) khi mới mở sách.
       if (!canRun || !bookId || !isHydrated) return;
 
@@ -63,6 +62,26 @@ export function useSaveReadingProgress({
 
       // Avoid duplicate writes
       if (lastSavedPageRef.current === nextPage) return;
+
+      const delta = nextPage - (lastSavedPageRef.current ?? 1);
+
+      // Update stats atomically via RPC if there's a positive delta
+      if (delta > 0) {
+        // We catch error silently here to not block the UI save
+        // @ts-ignore - RPC types might not be generated yet
+        const localDate = new Date();
+        const offset = localDate.getTimezoneOffset() * 60000;
+        const localDateStr = new Date(localDate.getTime() - offset).toISOString().split("T")[0];
+
+        supabase.rpc("increment_daily_stats", {
+          p_user_id: user?.id,
+          p_date: localDateStr,
+          p_delta_pages: delta,
+          p_delta_seconds: 0 // Seconds are handled by reading session
+        }).then(({ error }) => {
+          if (error) console.error("Failed to update daily stats:", error);
+        });
+      }
 
       const progress = getProgress(nextPage);
 
@@ -75,7 +94,7 @@ export function useSaveReadingProgress({
       lastSavedPageRef.current = nextPage;
     },
     // Thêm dependency isHydrated
-    [bookId, canRun, getProgress, updateBook, isHydrated],
+    [bookId, canRun, getProgress, updateBook, isHydrated, user?.id],
   );
 
   // Hydrate current page from DB on open
@@ -102,7 +121,7 @@ export function useSaveReadingProgress({
 
       const dbPage = clampPage(typeof data?.current_page === "number" ? data.current_page : 1);
       setHydratedPage(dbPage);
-      
+
       // Đồng bộ lastSavedPageRef với DB để tránh lưu lặp lại ngay sau khi hydrate
       lastSavedPageRef.current = dbPage;
 

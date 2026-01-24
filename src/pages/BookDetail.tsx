@@ -9,6 +9,7 @@ import {
   Highlighter,
   List,
   Loader2,
+  MessageCircle,
   MoreVertical,
   Pencil,
   Play,
@@ -65,16 +66,6 @@ type TocRow = { chapter: number; title: string; page: number };
 
 type TocRowV2 = { label: string; title: string; page: number; depth: number };
 
-const demoToc: TocRowV2[] = [
-  { label: "I", title: "Mở đầu - Giấc mơ lặp lại", page: 1, depth: 0 },
-  { label: "II", title: "Người phụ nữ Gypsy", page: 15, depth: 0 },
-  { label: "III", title: "Gặp gỡ nhà vua", page: 35, depth: 0 },
-  { label: "IV", title: "Hành trình qua sa mạc", page: 65, depth: 0 },
-  { label: "V", title: "Oasis và tình yêu", page: 98, depth: 0 },
-  { label: "VI", title: "Nhà Giả Kim", page: 130, depth: 0 },
-  { label: "VII", title: "Kho báu thực sự", page: 195, depth: 0 },
-];
-
 const toRoman = (num: number) => {
   if (!Number.isFinite(num) || num <= 0) return "";
   const romans: Array<{ value: number; symbol: string }> = [
@@ -111,14 +102,8 @@ const highlightBgByColor: Record<string, string> = {
 };
 
 const GENRES = [
-  "Văn học",
-  "Self-help",
-  "Kinh doanh",
-  "Khoa học",
-  "Lịch sử",
-  "Tâm lý",
-  "Truyện ngắn",
-  "Tiểu thuyết",
+  "Văn học", "Self-help", "Kinh doanh", "Khoa học",
+  "Lịch sử", "Tâm lý", "Truyện ngắn", "Tiểu thuyết",
 ] as const;
 
 type BookPrivacy = "private" | "link" | "public";
@@ -137,7 +122,6 @@ const formatViDate = (iso?: string | null) => {
 
 const normalizeTocItems = (raw: unknown): TocItem[] => {
   if (!Array.isArray(raw)) return [];
-
   return raw
     .map((v): TocItem | null => {
       if (!v || typeof v !== "object") return null;
@@ -152,35 +136,19 @@ const normalizeTocItems = (raw: unknown): TocItem[] => {
 
 const flattenToc = (items: TocItem[]): TocRowV2[] => {
   const rows: TocRowV2[] = [];
-
-  const walk = (
-    nodes: TocItem[],
-    depth: number,
-    prefix: string | null,
-  ) => {
+  const walk = (nodes: TocItem[], depth: number, prefix: string | null) => {
     let localIndex = 0;
     for (const n of nodes) {
       localIndex += 1;
-      const label =
-        depth === 0
-          ? toRoman(localIndex)
-          : prefix
-            ? `${prefix}.${localIndex}`
-            : `${localIndex}`;
-
+      const label = depth === 0 ? toRoman(localIndex) : prefix ? `${prefix}.${localIndex}` : `${localIndex}`;
       if (typeof n.page === "number") {
         rows.push({ label, title: n.title, page: n.page, depth });
       }
-
       if (Array.isArray(n.items) && n.items.length > 0) {
-        // For nested items, number as 1,2,... within each parent section
-        // (Roman numeral section stays at depth 0)
-        const nextPrefix = depth === 0 ? null : label;
-        walk(n.items, depth + 1, nextPrefix);
+        walk(n.items, depth + 1, depth === 0 ? null : label);
       }
     }
   };
-
   walk(items, 0, null);
   return rows;
 };
@@ -204,63 +172,44 @@ const BookDetail = () => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate("/auth", { replace: true });
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
     }
   }, [authLoading, user, navigate]);
 
   const book = useMemo(() => books.find((b) => b.id === id), [books, id]);
 
-  const demoBook = useMemo(
-    () => ({
-      id: id || "1",
-      title: "Nhà Giả Kim",
-      author: "Paulo Coelho",
-      cover_url: null as string | null,
-      description:
-        "Nhà giả kim là tiểu thuyết của nhà văn người Brasil Paulo Coelho. Cuốn sách viết về hành trình của chàng chăn cừu Santiago đến các Kim tự tháp Ai Cập trong hành trình tìm kiếm kho báu. Trên đường đi, anh gặp một người phụ nữ Gypsy, một người đàn ông tự xưng là vua, và một nhà giả kim thuật, tất cả đều chỉ dẫn anh theo những cách khác nhau.",
-      category: "Văn học",
-      total_pages: 228,
-      tags: ["Triết học", "Tâm linh", "Phiêu lưu", "Cuộc sống"],
-      created_at: "2024-01-01",
-      updated_at: "2024-01-10",
-    }),
-    [id]
-  );
-
-  const title = book?.title ?? demoBook.title;
-  const author = book?.author ?? demoBook.author;
-  const coverUrl = book?.cover_url ?? demoBook.cover_url;
-  const description = book?.description ?? demoBook.description;
-  const category = book?.genre ?? demoBook.category;
+  const title = book?.title ?? "Sách không tên";
+  const author = book?.author ?? "Tác giả ẩn danh";
+  const coverUrl = book?.cover_url ?? null;
+  const description = book?.description ?? "Chưa có giới thiệu.";
+  const category = book?.genre ?? "Khác";
   const rawTotalPages = typeof book?.total_pages === "number" ? book.total_pages : null;
   const totalPages = rawTotalPages && rawTotalPages > 0 ? rawTotalPages : null;
   const currentPage = typeof book?.current_page === "number" ? book.current_page : 0;
   const progressPct = typeof book?.progress === "number" ? Math.max(0, Math.min(100, book.progress)) : 0;
 
-  const startedAt = book?.created_at ?? demoBook.created_at;
-  const lastReadAt = book?.updated_at ?? demoBook.updated_at;
+  const startedAt = book?.created_at;
+  const lastReadAt = book?.updated_at;
 
-  // Estimate remaining reading time: 1.5 minutes per remaining page, converted to hours.
   const remainingPages = typeof totalPages === "number" ? Math.max(0, totalPages - currentPage) : null;
   const estimatedMinutes = typeof remainingPages === "number" ? Math.round(remainingPages * 1.5) : null;
   const estimatedHoursRaw = typeof estimatedMinutes === "number" ? estimatedMinutes / 60 : null;
   const estimatedHoursDisplay =
     typeof estimatedHoursRaw === "number"
       ? Math.max(
-          0.1,
-          estimatedHoursRaw >= 10 ? Math.round(estimatedHoursRaw) : Math.round(estimatedHoursRaw * 10) / 10,
-        )
+        0.1,
+        estimatedHoursRaw >= 10 ? Math.round(estimatedHoursRaw) : Math.round(estimatedHoursRaw * 10) / 10,
+      )
       : null;
 
   const tags = useMemo(() => {
-    const fromBook = book?.genre ? [book.genre] : [];
-    return fromBook.length > 0 ? fromBook : demoBook.tags;
-  }, [book?.genre, demoBook.tags]);
+    return book?.genre ? [book.genre] : [];
+  }, [book?.genre]);
 
   const tableOfContents = useMemo(() => {
     const normalized = normalizeTocItems(book?.toc);
-    const flattened = flattenToc(normalized);
-    return flattened.length > 0 ? flattened : demoToc;
+    return flattenToc(normalized);
   }, [book?.toc]);
 
   const openEditDialog = () => {
@@ -271,9 +220,9 @@ const BookDetail = () => {
     setEditDescription(book.description ?? "");
     setEditGenre(book.genre ? book.genre : "none");
 
-    const privacyKey = `book_privacy_${book.id}`;
-    const savedPrivacy = (localStorage.getItem(privacyKey) as BookPrivacy | null) ?? null;
-    setEditPrivacy(savedPrivacy && ["private", "link", "public"].includes(savedPrivacy) ? savedPrivacy : "private");
+    const validPrivacy = ["private", "link", "public"];
+    const currentVis = book.visibility as BookPrivacy | null;
+    setEditPrivacy(currentVis && validPrivacy.includes(currentVis) ? currentVis : "private");
 
     setIsEditOpen(true);
   };
@@ -298,9 +247,8 @@ const BookDetail = () => {
         author: editAuthor.trim() ? editAuthor.trim() : null,
         description: editDescription.trim() ? editDescription.trim() : null,
         genre: editGenre !== "none" && editGenre.trim() ? editGenre.trim() : null,
+        visibility: editPrivacy,
       });
-
-      localStorage.setItem(`book_privacy_${book.id}`, editPrivacy);
 
       toast({
         title: "Đã cập nhật",
@@ -381,11 +329,11 @@ const BookDetail = () => {
   };
 
   const coverColor = useMemo(() => {
-    const source = book?.id ?? demoBook.id;
+    const source = book?.id ?? "unknown";
     const hash = Array.from(source).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
     const colors = ["zinc", "slate", "indigo", "violet", "emerald", "rose"] as const;
     return colors[hash % colors.length];
-  }, [book?.id, demoBook.id]);
+  }, [book?.id]);
 
   if (authLoading || booksLoading) {
     return (
@@ -395,12 +343,23 @@ const BookDetail = () => {
     );
   }
 
-  // If we can't find the book in the user's library, still show the sample layout.
   const canRead = !!book && (!!book.file_url || !!book.is_from_library);
+
+  if (!book && !booksLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-center p-4">
+        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+          <BookOpen className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-bold mb-2">Không tìm thấy sách</h2>
+        <p className="text-muted-foreground mb-6">Cuốn sách này có thể đã bị xóa hoặc không tồn tại.</p>
+        <Button onClick={() => navigate("/")} variant="default">Quay về trang chủ</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen overflow-hidden bg-background">
-      {/* Decorative Background */}
       <div className="fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-warm-pink/30 to-coral/20 rounded-full blur-3xl animate-pulse-soft" />
         <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-lavender/30 to-sky/20 rounded-full blur-3xl animate-float" />
@@ -409,7 +368,6 @@ const BookDetail = () => {
       </div>
 
       <main className="container mx-auto px-4 py-6">
-        {/* Back + actions */}
         <div className="flex items-center justify-between mb-6">
           <Button
             variant="ghost"
@@ -429,6 +387,10 @@ const BookDetail = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={openEditDialog}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Chỉnh sửa
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive">
                   <Trash2 className="mr-2 h-4 w-4" />
                   Xóa sách
@@ -438,9 +400,7 @@ const BookDetail = () => {
           )}
         </div>
 
-        {/* Hero Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-          {/* Book Cover */}
           <div className="lg:col-span-1 flex justify-center lg:justify-start">
             <div className="relative group">
               <div className="absolute -inset-4 bg-gradient-to-br from-primary/25 via-accent/15 to-secondary/20 rounded-3xl blur-2xl opacity-70 group-hover:opacity-90 transition-opacity" />
@@ -470,7 +430,6 @@ const BookDetail = () => {
             </div>
           </div>
 
-          {/* Book Info */}
           <div className="lg:col-span-2 space-y-6">
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -485,7 +444,6 @@ const BookDetail = () => {
               </div>
             </div>
 
-            {/* Stats */}
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border/60 bg-card/60 backdrop-blur">
                 <BookOpen className="w-5 h-5 text-primary" />
@@ -503,7 +461,6 @@ const BookDetail = () => {
               </div>
             </div>
 
-            {/* Progress */}
             <div className="rounded-2xl p-6 space-y-4 border border-border/60 bg-card/60 backdrop-blur">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
@@ -527,7 +484,6 @@ const BookDetail = () => {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex flex-wrap gap-3">
               <Button
                 size="lg"
@@ -536,8 +492,16 @@ const BookDetail = () => {
                 disabled={!canRead}
               >
                 <Play className="w-5 h-5" />
-                Tiếp tục đọc
+                {!canRead ? "Thêm file để đọc" : "Tiếp tục đọc"}
               </Button>
+              {!canRead && (
+                <div className="w-full">
+                  <p className="text-sm text-orange-600 dark:text-orange-400 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>Sách này chưa có file. Vui lòng tải lên file PDF/EPUB để đọc.</span>
+                  </p>
+                </div>
+              )}
               <Button
                 variant="outline"
                 size="lg"
@@ -565,9 +529,17 @@ const BookDetail = () => {
                 <Pencil className="w-5 h-5" />
                 Chỉnh sửa
               </Button>
+              <Button
+                variant="ghost"
+                size="lg"
+                className="gap-2 rounded-xl text-muted-foreground hover:text-red-500"
+                onClick={() => navigate('/help')}
+              >
+                <MessageCircle className="w-5 h-5" />
+                Báo lỗi
+              </Button>
             </div>
 
-            {/* Tags */}
             <div className="flex flex-wrap gap-2">
               {tags.map((tag) => (
                 <span
@@ -581,9 +553,7 @@ const BookDetail = () => {
           </div>
         </div>
 
-        {/* Content Sections */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-          {/* Introduction */}
           <div className="rounded-3xl p-6 space-y-4 border border-border/60 bg-card/60 backdrop-blur">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-lavender to-sky flex items-center justify-center">
@@ -599,7 +569,6 @@ const BookDetail = () => {
             </div>
           </div>
 
-          {/* Table of Contents */}
           <div className="rounded-3xl p-6 space-y-4 border border-border/60 bg-card/60 backdrop-blur">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sage to-soft-sage flex items-center justify-center">
@@ -608,7 +577,7 @@ const BookDetail = () => {
               <h2 className="text-xl font-bold text-foreground">Mục lục</h2>
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-              {tableOfContents.map((item, i) => {
+              {tableOfContents.length > 0 ? tableOfContents.map((item, i) => {
                 const isCurrentChapter =
                   currentPage >= item.page &&
                   (i === tableOfContents.length - 1 || currentPage < tableOfContents[i + 1].page);
@@ -625,7 +594,7 @@ const BookDetail = () => {
                           ? "bg-warm-pink/10 border border-warm-pink/20 hover:bg-warm-pink/15"
                           : "hover:bg-muted/50"
                     )}
-                    onClick={() => navigate(`/read/${book?.id || demoBook.id}?page=${item.page}`)}
+                    onClick={() => navigate(`/read/${book?.id}?page=${item.page}`)}
                   >
                     <div className="flex items-center gap-3">
                       <span
@@ -652,12 +621,13 @@ const BookDetail = () => {
                     <span className="text-sm text-muted-foreground">Trang {item.page}</span>
                   </div>
                 );
-              })}
+              }) : (
+                <p className="text-muted-foreground text-center py-4">Chưa có mục lục.</p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Highlights */}
         <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur mb-10">
           <div className="flex items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
@@ -673,7 +643,7 @@ const BookDetail = () => {
             <Button
               variant="outline"
               className="rounded-xl"
-              onClick={() => navigate(`/notes?bookId=${book?.id || demoBook.id}`)}
+              onClick={() => navigate(`/notes?bookId=${book?.id}`)}
             >
               Xem tất cả ({highlights.length})
             </Button>
@@ -729,7 +699,6 @@ const BookDetail = () => {
           )}
         </div>
 
-        {/* Reading History */}
         <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center">
@@ -760,7 +729,6 @@ const BookDetail = () => {
         </div>
       </main>
 
-      {/* Delete confirmation */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -778,7 +746,6 @@ const BookDetail = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit book dialog */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
@@ -859,9 +826,6 @@ const BookDetail = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Lưu ý: Quyền riêng tư hiện đang lưu trên máy (local), chưa đồng bộ lên database.
-              </p>
             </div>
           </div>
 

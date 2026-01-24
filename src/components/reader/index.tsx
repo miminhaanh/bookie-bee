@@ -1,13 +1,15 @@
 import { useParams, useLocation } from "react-router-dom";
-import { useCallback, useMemo, useEffect, useRef } from "react";
-import { Bookmark, History, List, Settings, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import {
   SpecialZoomLevel,
   type DocumentLoadEvent,
   type PageChangeEvent,
+  ScrollMode,
+  ViewMode,
+  type ZoomEvent,
 } from "@react-pdf-viewer/core";
 import {
   highlightPlugin,
@@ -21,10 +23,6 @@ import { PDFViewerContainer } from "./parts/PDFViewerContainer";
 import { ReaderTopBar } from "./parts/ReaderTopBar";
 import { ReaderBottomBar } from "./parts/ReaderBottomBar";
 import { TranslationDialog } from "./overlays/TranslationDialog";
-import { HighlightsList } from "./overlays/HighlightsList";
-import { TranslateHistorySheet } from "./overlays/TranslateHistorySheet";
-import { TableOfContents } from "./overlays/TableOfContents";
-import { ReaderSettings } from "./overlays/ReaderSettings";
 
 const ReaderContainer = () => {
   const { id } = useParams<{ id: string }>();
@@ -42,13 +40,6 @@ const ReaderContainer = () => {
     authLoading,
     showUI,
     theme,
-    setTheme,
-    fontSize,
-    setFontSize,
-    fontFamily,
-    setFontFamily,
-    lineHeight,
-    setLineHeight,
     currentPage,
     setCurrentPage,
     scrollMode,
@@ -57,21 +48,6 @@ const ReaderContainer = () => {
     setHasVisitedPage,
     pageHighlights,
     setPageHighlights,
-    highlightsList,
-    setHighlightsList,
-    isHighlightsLoading,
-    deletingHighlightId,
-    setDeletingHighlightId,
-    addHighlight,
-    deleteHighlight,
-    isHighlightsOpen,
-    setIsHighlightsOpen,
-    isTocOpen,
-    setIsTocOpen,
-    isHistoryOpen,
-    setIsHistoryOpen,
-    isSettingsOpen,
-    setIsSettingsOpen,
     isTranslateOpen,
     setIsTranslateOpen,
     translateSourceText,
@@ -82,39 +58,63 @@ const ReaderContainer = () => {
     setIsTranslating,
     translateError,
     setTranslateError,
-    translateHistory,
-    setTranslateHistory,
     scrollModePluginInstance,
     bookmarkPluginInstance,
     pageNavigationPluginInstance,
     zoomPluginInstance,
-    pdfWrapperRef,
     didJumpToInitialPageRef,
     handleTap,
     endSession,
     navigate,
-    toast,
     updateBook,
     themeStyles,
     getHighlightAreasFromDb,
     findOverlappingHighlightIds,
     colorToBackground,
-    translateText,
     deleteHighlightFromDb,
-    saveTranslateHistory,
     totalPages,
     isBookLoading,
     bookLoadError,
   } = core;
-
-  const { ZoomIn, ZoomOut, CurrentScale } = zoomPluginInstance;
+  const { ZoomIn, ZoomOut } = zoomPluginInstance;
   const { CurrentPageInput, NumberOfPages } = pageNavigationPluginInstance;
-  const { Bookmarks } = bookmarkPluginInstance;
-
   const currentTheme = themeStyles[theme];
   const isPdfFile = fileUrl.toLowerCase().endsWith(".pdf");
   const didJumpToQueryPageRef = useRef(false);
   const queryPageRef = useRef<number | null>(null);
+  const denomForProgress = numPages ?? totalPages ?? 1;
+  const progressPercent = Math.min(100, Math.max(0, Math.round((currentPage / denomForProgress) * 100)));
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomInput, setZoomInput] = useState("100");
+  const [isEditingZoom, setIsEditingZoom] = useState(false);
+  const [preferredViewMode, setPreferredViewMode] = useState<ViewMode>(ViewMode.DualPage);
+  const [isNarrow, setIsNarrow] = useState(false);
+
+  const effectiveViewMode = useMemo(() => {
+    if (scrollMode !== ScrollMode.Horizontal) return ViewMode.SinglePage;
+    if (isNarrow) return ViewMode.SinglePage;
+    return preferredViewMode;
+  }, [scrollMode, isNarrow, preferredViewMode]);
+
+  useEffect(() => {
+    const savedViewMode = localStorage.getItem("readerViewMode");
+    if (savedViewMode === "single") setPreferredViewMode(ViewMode.SinglePage);
+    if (savedViewMode === "dual") setPreferredViewMode(ViewMode.DualPage);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "readerViewMode",
+      preferredViewMode === ViewMode.DualPage ? "dual" : "single"
+    );
+  }, [preferredViewMode]);
+
+  useEffect(() => {
+    const update = () => setIsNarrow(window.innerWidth < 1024);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   // Parse query page from URL
   useEffect(() => {
@@ -132,6 +132,31 @@ const ReaderContainer = () => {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
     navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
   }, [navigate, shouldRedirectToAuth]);
+
+  useEffect(() => {
+    if (isEditingZoom) return;
+    setZoomInput(String(Math.round(zoomScale * 100)));
+  }, [zoomScale, isEditingZoom]);
+
+  useEffect(() => {
+    if (scrollMode !== ScrollMode.Horizontal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        pageNavigationPluginInstance.jumpToPreviousPage();
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        pageNavigationPluginInstance.jumpToNextPage();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [scrollMode, pageNavigationPluginInstance]);
 
   // Prefetch PDF blob
   useEffect(() => {
@@ -186,7 +211,22 @@ const ReaderContainer = () => {
           hasOverlappingHighlights={hasOverlap}
           onHighlight={async (color) => {
             if (!user?.id || !id) return;
-            // Toolbar will call addHighlight via the hook
+            try {
+              await addHighlight.mutateAsync({
+                book_id: id,
+                content: props.selectedText,
+                note: null,
+                color,
+                position: JSON.stringify({ highlightAreas: props.highlightAreas }),
+                chapter: null,
+                page_number: currentPage,
+              });
+
+              const newHighlights = await core.fetchPageHighlights(user.id, id, currentPage);
+              setPageHighlights(newHighlights);
+            } catch (err) {
+              console.warn("Failed to add highlight:", err);
+            }
           }}
           onDeleteHighlight={async () => {
             if (!user?.id) return;
@@ -304,7 +344,7 @@ const ReaderContainer = () => {
   return (
     <div
       className={cn(
-        "relative h-dvh w-full overflow-hidden transition-colors duration-300",
+        "group relative h-dvh w-full overflow-hidden transition-colors duration-300",
         currentTheme.bg,
         currentTheme.text
       )}
@@ -328,144 +368,64 @@ const ReaderContainer = () => {
           endSession();
           navigate(`/book/${id}`);
         }}
-        tocButton={
-          <Sheet open={isTocOpen} onOpenChange={setIsTocOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-                <List className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-          </Sheet>
-        }
-        highlightsButton={
-          <Sheet open={isHighlightsOpen} onOpenChange={setIsHighlightsOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-                <Bookmark className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-          </Sheet>
-        }
-        translateHistoryButton={
-          <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-                <History className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-          </Sheet>
-        }
-        settingsButton={
-          <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}>
-                <Settings className="h-4 w-4" />
-              </Button>
-            </SheetTrigger>
-          </Sheet>
-        }
       />
 
-      {/* Overlays */}
-      <TableOfContents
-        isOpen={isTocOpen}
-        onOpenChange={setIsTocOpen}
-        bookmarksComponent={<Bookmarks />}
-      />
-
-      <HighlightsList
-        isOpen={isHighlightsOpen}
-        onOpenChange={setIsHighlightsOpen}
-        highlights={highlightsList}
-        isLoading={isHighlightsLoading}
-        deletingId={deletingHighlightId}
-        onJumpToPage={(pageNumber) => {
-          pageNavigationPluginInstance.jumpToPage(Math.max(0, pageNumber - 1));
-          setCurrentPage(pageNumber);
-          setHasVisitedPage(true);
-          setIsHighlightsOpen(false);
-        }}
-        onDeleteHighlight={async (highlightId) => {
-          setDeletingHighlightId(highlightId);
-          await deleteHighlightFromDb(highlightId);
-          setHighlightsList((prev) => prev.filter((x) => x.id !== highlightId));
-          setPageHighlights((prev) => prev.filter((x) => x.id !== highlightId));
-          setDeletingHighlightId(null);
-          toast({ title: "Đã xoá highlight" });
-        }}
-      />
-
-      <TranslateHistorySheet
-        isOpen={isHistoryOpen}
-        onOpenChange={setIsHistoryOpen}
-        history={translateHistory}
-        onClearAll={() => {
-          if (!user?.id) return;
-          saveTranslateHistory(user.id, []);
-          setTranslateHistory([]);
-          toast({ title: "Đã xoá lịch sử dịch" });
-        }}
-        onSelectItem={(item) => {
-          setTranslateSourceText(item.originalText);
-          setTranslatedText(item.translatedText);
-          setTranslateError(null);
-          setIsTranslating(false);
-          setIsTranslateOpen(true);
-          setIsHistoryOpen(false);
-        }}
-        onDeleteItem={(index) => {
-          const updated = translateHistory.filter((_, i) => i !== Number(index));
-          if (!user?.id) return;
-          saveTranslateHistory(user.id, updated);
-          setTranslateHistory(updated);
-          toast({ title: "Đã xoá mục" });
-        }}
-      />
-
-      <ReaderSettings
-        scrollMode={scrollMode}
-        theme={theme}
-        fontFamily={fontFamily}
-        fontSize={fontSize}
-        lineHeight={lineHeight}
-        onScrollModeChange={(mode) => {
-          setScrollMode(mode);
-          scrollModePluginInstance.switchScrollMode(mode);
-          localStorage.setItem("readerScrollMode", mode.toString());
-        }}
-        onThemeChange={(newTheme) => {
-          setTheme(newTheme);
-          localStorage.setItem("readerTheme", newTheme);
-        }}
-        onFontFamilyChange={(newFamily) => {
-          setFontFamily(newFamily);
-          localStorage.setItem("readerFontFamily", newFamily);
-        }}
-        onFontSizeChange={(newSize) => {
-          setFontSize(newSize);
-          localStorage.setItem("readerFontSize", newSize.toString());
-        }}
-        onLineHeightChange={(newHeight) => {
-          setLineHeight(newHeight);
-          localStorage.setItem("readerLineHeight", newHeight.toString());
-        }}
-      />
+      {/* Subtle progress indicator (vertical mode) */}
+      {scrollMode === ScrollMode.Vertical && (
+        <div className="pointer-events-none fixed right-4 top-20 bottom-24 hidden w-1.5 sm:block opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <div className="h-full w-full rounded-full bg-foreground/10">
+            <div
+              className="w-full rounded-full bg-foreground/20 transition-[height] duration-150"
+              style={{ height: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Viewer */}
       {pdfBlobUrl ? (
-        <PDFViewerContainer
-          fileUrl={pdfBlobUrl}
-          plugins={[
-            highlightPluginInstance,
-            scrollModePluginInstance,
-            bookmarkPluginInstance,
-            pageNavigationPluginInstance,
-            zoomPluginInstance,
-          ]}
-          onDocumentLoad={handlePdfDocumentLoad}
-          onPageChange={handlePdfPageChange}
-          defaultScale={SpecialZoomLevel.PageFit as unknown as number}
-        />
+        <div className="absolute inset-0 flex justify-center px-4 pb-24 pt-16 sm:px-8">
+          <div className="h-full w-full max-w-[920px]">
+            <PDFViewerContainer
+              fileUrl={pdfBlobUrl}
+              plugins={[
+                highlightPluginInstance,
+                scrollModePluginInstance,
+                bookmarkPluginInstance,
+                pageNavigationPluginInstance,
+                zoomPluginInstance,
+              ]}
+              onDocumentLoad={handlePdfDocumentLoad}
+              onPageChange={handlePdfPageChange}
+              onZoom={(e: ZoomEvent) => setZoomScale(e.scale)}
+              viewMode={effectiveViewMode}
+              defaultScale={SpecialZoomLevel.PageFit as unknown as number}
+            />
+          </div>
+
+          {scrollMode === ScrollMode.Horizontal && (
+            <>
+              <button
+                type="button"
+                aria-label="Trang trước"
+                className="absolute left-0 top-0 h-full w-14 cursor-pointer bg-transparent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  pageNavigationPluginInstance.jumpToPreviousPage();
+                }}
+              />
+              <button
+                type="button"
+                aria-label="Trang sau"
+                className="absolute right-0 top-0 h-full w-14 cursor-pointer bg-transparent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  pageNavigationPluginInstance.jumpToNextPage();
+                }}
+              />
+            </>
+          )}
+        </div>
       ) : (
         <div className="flex h-full items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -479,11 +439,62 @@ const ReaderContainer = () => {
         totalPages={totalPages}
         scrollMode={scrollMode}
         numPages={numPages}
+        onScrollModeChange={(mode) => {
+          setScrollMode(mode);
+          scrollModePluginInstance.switchScrollMode(mode);
+          localStorage.setItem("readerScrollMode", mode.toString());
+        }}
+        isDualPage={effectiveViewMode === ViewMode.DualPage}
+        isDualPageDisabled={isNarrow}
+        onViewModeChange={(isDual) => {
+          setPreferredViewMode(isDual ? ViewMode.DualPage : ViewMode.SinglePage);
+        }}
         currentPageInput={<CurrentPageInput />}
         numberOfPagesComponent={<NumberOfPages />}
-        zoomInButton={<ZoomIn>{(props) => <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); props.onClick(); }}>➕</Button>}</ZoomIn>}
-        zoomOutButton={<ZoomOut>{(props) => <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); props.onClick(); }}>➖</Button>}</ZoomOut>}
-        currentScaleComponent={<CurrentScale>{(props) => <div className="text-xs">{Math.round(props.scale * 100)}%</div>}</CurrentScale>}
+        zoomInButton={
+          <ZoomIn>
+            {(props) => (
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-xl transition-all hover:scale-[1.02]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onClick();
+                }}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
+          </ZoomIn>
+        }
+        zoomOutButton={
+          <ZoomOut>
+            {(props) => (
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-xl transition-all hover:scale-[1.02]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onClick();
+                }}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+            )}
+          </ZoomOut>
+        }
+        zoomInput={zoomInput}
+        onZoomInputChange={setZoomInput}
+        onZoomInputCommit={() => {
+          const parsed = Number(zoomInput);
+          if (!Number.isFinite(parsed)) return;
+          const clamped = Math.min(400, Math.max(25, parsed));
+          zoomPluginInstance.zoomTo(clamped / 100);
+        }}
+        onZoomInputFocus={() => setIsEditingZoom(true)}
+        onZoomInputBlur={() => setIsEditingZoom(false)}
         onPreviousPage={() => pageNavigationPluginInstance.jumpToPreviousPage()}
         onNextPage={() => pageNavigationPluginInstance.jumpToNextPage()}
       />

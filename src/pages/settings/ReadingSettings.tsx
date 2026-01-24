@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BookOpen, Type, AlignJustify, ArrowLeft, Check } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -11,9 +11,40 @@ const ReadingSettings = () => {
   const navigate = useNavigate();
   const [fontSize, setFontSize] = useState([18]);
   const [lineHeight, setLineHeight] = useState([1.5]);
-  const [theme, setTheme] = useState<"light" | "dark" | "warm">("warm");
+  const [theme, setTheme] = useState<"light" | "dark" | "sepia">("sepia");
   const [fontFamily, setFontFamily] = useState<"nunito" | "serif" | "mono">("nunito");
 
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("readerTheme");
+    const savedFontSize = localStorage.getItem("readerFontSize");
+    const savedLineHeight = localStorage.getItem("readerLineHeight");
+    const savedFontFamily = localStorage.getItem("readerFontFamily");
+
+    if (savedTheme === "light" || savedTheme === "dark" || savedTheme === "sepia") {
+      setTheme(savedTheme);
+    }
+    if (savedFontSize) {
+      const parsed = Number(savedFontSize);
+      if (!Number.isNaN(parsed)) setFontSize([parsed]);
+    }
+    if (savedLineHeight) {
+      const parsed = Number(savedLineHeight);
+      if (!Number.isNaN(parsed)) setLineHeight([parsed]);
+    }
+    if (savedFontFamily === "sans" || savedFontFamily === "serif") {
+      setFontFamily(savedFontFamily === "serif" ? "serif" : "nunito");
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("readerTheme", theme);
+    localStorage.setItem("readerFontSize", String(fontSize[0]));
+    localStorage.setItem("readerLineHeight", String(lineHeight[0]));
+    localStorage.setItem(
+      "readerFontFamily",
+      fontFamily === "serif" ? "serif" : "sans"
+    );
+  }, [theme, fontSize, lineHeight, fontFamily]);
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto pb-10 px-4 md:px-8">
@@ -51,7 +82,7 @@ const ReadingSettings = () => {
             <div className="grid grid-cols-3 gap-4">
               {[
                 { id: "light", name: "Trắng sáng", bg: "bg-white", text: "text-slate-800" },
-                { id: "warm", name: "Vàng ấm", bg: "bg-[#FDF6E3]", text: "text-[#5F4B32]" },
+                { id: "sepia", name: "Vàng ấm", bg: "bg-[#FDF6E3]", text: "text-[#5F4B32]" },
                 { id: "dark", name: "Ban đêm", bg: "bg-[#1A1A1A]", text: "text-slate-300" },
               ].map((t) => (
                 <button
@@ -149,12 +180,12 @@ const ReadingSettings = () => {
           <div className={cn(
             "p-6 rounded-3xl shadow-lg border transition-all duration-300",
             theme === "light" ? "bg-white border-slate-100 text-slate-800" :
-              theme === "warm" ? "bg-[#FDF6E3] border-[#EEE8D5] text-[#5F4B32]" :
+              theme === "sepia" ? "bg-[#FDF6E3] border-[#EEE8D5] text-[#5F4B32]" :
                 "bg-[#1A1A1A] border-[#333] text-slate-300"
           )}>
             <div className="flex items-center justify-between mb-4 opacity-50">
               <span className="text-xs font-bold uppercase tracking-widest">Preview</span>
-              <span className="text-xs font-bold">{fontFamily === "nunito" ? "Nunito" : fontFamily === "serif" ? "Merriweather" : "Mono"} • {fontSize}px</span>
+              <span className="text-xs font-bold">{fontFamily === "nunito" ? "Nunito" : fontFamily === "serif" ? "Merriweather" : "Mono"} • {fontSize[0]}px</span>
             </div>
             <p
               style={{ fontSize: `${fontSize[0]}px`, lineHeight: lineHeight[0] }}

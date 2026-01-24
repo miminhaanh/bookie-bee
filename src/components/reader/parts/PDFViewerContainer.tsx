@@ -1,4 +1,4 @@
-import { Worker, Viewer, type DocumentLoadEvent, type PageChangeEvent } from "@react-pdf-viewer/core";
+import { Worker, Viewer, type DocumentLoadEvent, type PageChangeEvent, type ZoomEvent, type ViewMode } from "@react-pdf-viewer/core";
 import "@react-pdf-viewer/core/lib/styles/index.css";
 import "@react-pdf-viewer/highlight/lib/styles/index.css";
 import "@react-pdf-viewer/bookmark/lib/styles/index.css";
@@ -12,7 +12,9 @@ interface PDFViewerContainerProps {
   plugins: any[];
   onDocumentLoad?: (e: DocumentLoadEvent) => void;
   onPageChange?: (e: PageChangeEvent) => void;
+  onZoom?: (e: ZoomEvent) => void;
   defaultScale?: number;
+  viewMode?: ViewMode;
 }
 
 export const PDFViewerContainer = ({
@@ -20,7 +22,9 @@ export const PDFViewerContainer = ({
   plugins,
   onDocumentLoad,
   onPageChange,
+  onZoom,
   defaultScale,
+  viewMode,
 }: PDFViewerContainerProps) => {
   return (
     <div className="flex-1 h-full overflow-hidden relative">
@@ -30,7 +34,9 @@ export const PDFViewerContainer = ({
           plugins={plugins}
           onDocumentLoad={onDocumentLoad}
           onPageChange={onPageChange}
+          onZoom={onZoom}
           defaultScale={defaultScale}
+          viewMode={viewMode}
         />
       </Worker>
     </div>

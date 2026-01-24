@@ -27,7 +27,6 @@ import { useSaveReadingProgress } from "@/hooks/useSaveReadingProgress";
 import { useHighlights, type Highlight as DbHighlight } from "@/hooks/useHighlights";
 import { useProfile } from "@/hooks/useProfile";
 import { cn } from "@/lib/utils";
-import ePub from "epubjs";
 import { supabase } from "@/integrations/supabase/client";
 import {
   ScrollMode,
@@ -53,12 +52,6 @@ import "@react-pdf-viewer/page-navigation/lib/styles/index.css";
 import { zoomPlugin } from "@react-pdf-viewer/zoom";
 import "@react-pdf-viewer/zoom/lib/styles/index.css";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.js?url";
-
-type EpubTocItem = {
-  label: string;
-  href?: string;
-  subitems?: EpubTocItem[];
-};
 
 type TranslateHistoryItem = {
   id: string;
@@ -163,17 +156,13 @@ const Reader = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [scrollMode, setScrollMode] = useState<ScrollMode>(ScrollMode.Vertical);
   const [isPdf, setIsPdf] = useState(false);
-  const [isEpub, setIsEpub] = useState(false);
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [epubBlobUrl, setEpubBlobUrl] = useState<string | null>(null);
   const [hasVisitedPage, setHasVisitedPage] = useState(false);
   const [deletingHighlightId, setDeletingHighlightId] = useState<string | null>(null);
   const [pageHighlights, setPageHighlights] = useState<DbHighlight[]>([]);
   const [isHighlightsOpen, setIsHighlightsOpen] = useState(false);
   const [isTocOpen, setIsTocOpen] = useState(false);
-  const [epubToc, setEpubToc] = useState<EpubTocItem[]>([]);
-  const [isEpubTocLoading, setIsEpubTocLoading] = useState(false);
   const [highlightsList, setHighlightsList] = useState<DbHighlight[]>([]);
   const [isHighlightsLoading, setIsHighlightsLoading] = useState(false);
 
@@ -184,9 +173,6 @@ const Reader = () => {
   const [translateError, setTranslateError] = useState<string | null>(null);
   const [isTranslateHistoryOpen, setIsTranslateHistoryOpen] = useState(false);
   const [translateHistory, setTranslateHistory] = useState<TranslateHistoryItem[]>([]);
-  const epubRef = useRef<HTMLDivElement | null>(null);
-  const renditionRef = useRef<unknown>(null);
-  const bookRef = useRef<unknown>(null);
   const pdfWrapperRef = useRef<HTMLDivElement | null>(null);
   const currentPageRef = useRef(currentPage);
   
@@ -294,10 +280,10 @@ const Reader = () => {
 
   const currentTheme = themeStyles[theme];
 
-  // Sample content for demo (in real app, this would be parsed from EPUB/PDF)
+  // Sample content for demo
   const sampleContent = `
     <h2>Chương 1: Khởi đầu</h2>
-    <p>Đây là nội dung mẫu để demo giao diện đọc sách. Trong ứng dụng thực tế, nội dung sẽ được parse từ file EPUB hoặc PDF.</p>
+    <p>Đây là nội dung mẫu để demo giao diện đọc sách. Trong ứng dụng thực tế, nội dung sẽ được parse từ file PDF.</p>
     <p>BookWorm cung cấp trải nghiệm đọc sách tối ưu với nhiều tùy chọn cá nhân hóa. Bạn có thể điều chỉnh font chữ, kích thước, khoảng cách dòng và theme theo sở thích.</p>
     <p>Tính năng highlight cho phép bạn đánh dấu những đoạn văn hay và thêm ghi chú cá nhân. Tất cả sẽ được lưu trữ và đồng bộ trên cloud.</p>
     <p>Hệ thống tracking thời gian đọc giúp bạn theo dõi tiến độ và duy trì thói quen đọc sách hàng ngày. Streak sẽ được cập nhật khi bạn đọc ít nhất 5 phút mỗi ngày.</p>
@@ -328,7 +314,6 @@ const Reader = () => {
   useEffect(() => {
     const ext = fileUrl.split(".").pop()?.toLowerCase();
     setIsPdf(ext === "pdf");
-    setIsEpub(ext === "epub");
   }, [fileUrl]);
 
   // Highlights hook for saving highlights
@@ -700,10 +685,8 @@ const Reader = () => {
       
       const ext = fileUrl.split(".").pop()?.toLowerCase();
       const isPdfFile = ext === "pdf";
-      const isEpubFile = ext === "epub";
-      
-      if (!isPdfFile && !isEpubFile) return;
 
+      if (!isPdfFile) return;
       try {
         const isAbsolute = /^https?:\/\//i.test(fileUrl);
         let blob: Blob;
@@ -723,7 +706,6 @@ const Reader = () => {
         objectUrl = URL.createObjectURL(blob);
         if (!abort) {
           if (isPdfFile) setPdfBlobUrl(objectUrl);
-          if (isEpubFile) setEpubBlobUrl(objectUrl);
         }
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -738,51 +720,6 @@ const Reader = () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [fileUrl]);
-  
-  // Initialize EPUB rendering when needed
-  useEffect(() => {
-    if (!isEpub || !epubRef.current) return;
-    
-    // Prefer blob URL (prefetched) over raw URL to handle auth/CORS
-    const urlToUse = epubBlobUrl || fileUrl;
-    if (!urlToUse) return;
-
-    // Clean up previous instance first if needed
-    if (bookRef.current) {
-        try {
-           (bookRef.current as unknown as { destroy: () => void }).destroy();
-        } catch { /* ignore */ }
-    }
-
-    const bookObj = ePub(urlToUse);
-    bookRef.current = bookObj;
-    const rendition = bookObj.renderTo(epubRef.current, {
-      width: "100%",
-      height: "100%",
-      spread: "none",
-    });
-    rendition.display();
-    renditionRef.current = rendition;
-
-    const onRelocated = (location: any) => {
-       // Save location for progress tracking if needed
-       // Note: EPUB pages are fluid, so page numbers are approximate or location based.
-       // Location format: cfi strings.
-    };
-
-    rendition.on("relocated", onRelocated);
-
-    return () => {
-      try {
-        if (rendition && typeof rendition.destroy === "function") rendition.destroy();
-        if (bookObj && typeof (bookObj as unknown as { destroy?: unknown }).destroy === "function") {
-          (bookObj as unknown as { destroy: () => void }).destroy();
-        }
-      } catch (e) {
-        // ignore
-      }
-    };
-  }, [isEpub, fileUrl, epubBlobUrl]);
 
   // Cleanup on unmount: clear timeout and revoke blob URL
   useEffect(() => {
@@ -878,8 +815,6 @@ const Reader = () => {
               </div>
             </Worker>
           </div>
-        ) : isEpub && fileUrl ? (
-          <div className="h-full w-full" ref={epubRef} />
         ) : (
           <div className="h-full w-full overflow-auto px-4 py-14" onScroll={handleScroll}>
             <article
@@ -947,48 +882,6 @@ const Reader = () => {
                     <div className="text-sm">
                       <Bookmarks />
                     </div>
-                  ) : isEpub ? (
-                    isEpubTocLoading ? (
-                      <div className="flex items-center justify-center py-6">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                      </div>
-                    ) : epubToc.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Sách này chưa có mục lục.</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {(() => {
-                          const renderItems = (items: EpubTocItem[], depth = 0) => {
-                            return items.map((item, idx) => (
-                              <div key={`${depth}-${idx}-${item.href ?? item.label}`}>
-                                <button
-                                  type="button"
-                                  className={cn(
-                                    "w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
-                                    depth > 0 ? "pl-" + String(Math.min(2 + depth * 2, 10)) : "",
-                                  )}
-                                  style={{ paddingLeft: depth ? `${8 + depth * 12}px` : undefined }}
-                                  onClick={() => {
-                                    const href = item.href;
-                                    if (!href) return;
-                                    const rendition = renditionRef.current as unknown as { display?: (target: string) => unknown };
-                                    if (typeof rendition?.display === "function") {
-                                      void rendition.display(href);
-                                      setIsTocOpen(false);
-                                    }
-                                  }}
-                                >
-                                  {item.label}
-                                </button>
-                                {item.subitems && item.subitems.length ? (
-                                  <div className="mt-1">{renderItems(item.subitems, depth + 1)}</div>
-                                ) : null}
-                              </div>
-                            ));
-                          };
-                          return renderItems(epubToc);
-                        })()}
-                      </div>
-                    )
                   ) : (
                     <p className="text-sm text-muted-foreground">Mục lục chưa hỗ trợ cho định dạng này.</p>
                   )}
@@ -1478,13 +1371,7 @@ const Reader = () => {
                   size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (
-                      isEpub &&
-                      renditionRef.current &&
-                      typeof (renditionRef.current as { prev?: unknown }).prev === "function"
-                    ) {
-                      (renditionRef.current as { prev: () => void }).prev();
-                    }
+                    setCurrentPage((p) => Math.max(1, p - 1));
                   }}
                   disabled={currentPage <= 1}
                 >
@@ -1508,15 +1395,7 @@ const Reader = () => {
                   size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (
-                      isEpub &&
-                      renditionRef.current &&
-                      typeof (renditionRef.current as { next?: unknown }).next === "function"
-                    ) {
-                      (renditionRef.current as { next: () => void }).next();
-                    } else {
-                      setCurrentPage((p) => Math.min(totalPages, p + 1));
-                    }
+                    setCurrentPage((p) => Math.min(totalPages, p + 1));
                   }}
                   disabled={currentPage >= totalPages}
                 >

@@ -46,6 +46,8 @@ export interface ReportsData {
     totalPages: number;
     streak: number;
   };
+  // Convenience field để màn hình khác (Dashboard) có thể truy cập streak nhanh
+  streak: number;
   moodStats?: {
     counts: Record<string, number>;
     total: number;
@@ -63,12 +65,6 @@ export interface ReportsData {
 }
 
 const safeString = (v: unknown, fallback = "") => (typeof v === "string" ? v : fallback);
-
-const wordsCount = (text: string) => {
-  const trimmed = text.trim();
-  if (!trimmed) return 0;
-  return trimmed.split(/\s+/).filter(Boolean).length;
-};
 
 const formatDuration = (totalSeconds: number) => {
   const totalMinutes = Math.max(0, Math.round(totalSeconds / 60));
@@ -93,21 +89,6 @@ const computeReaderType = (hourly: { hour: number; minutes: number }[]) => {
   return "balanced" as const;
 };
 
-const dominantColorFromHighlights = (counts: Record<string, number>) => {
-  const entries = Object.entries(counts);
-  entries.sort((a, b) => b[1] - a[1]);
-  const top = entries[0]?.[0];
-  switch (top) {
-    case "blue":
-      return "blue" as const;
-    case "yellow":
-      return "orange" as const;
-    case "red":
-      return "pink" as const;
-    default:
-      return "pink" as const;
-  }
-};
 
 export const useReportsData = (opts?: { forDate?: Date }) => {
   const { user } = useAuth();
@@ -210,7 +191,7 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
       // Honeycomb streak days (optimized to fetch less data)
       const { data: monthDaily } = await supabase
         .from("daily_reading")
-        .select("date,total_seconds")
+        .select("date,total_seconds,pages_read")
         .eq("user_id", user.id)
         .gte("date", format(monthStart, "yyyy-MM-dd"))
         .lt("date", format(monthEnd, "yyyy-MM-dd"));
@@ -227,123 +208,22 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
         }
       }
 
-      // Wrapped: highlights (optimized)
-      const { data: monthHighlights } = await supabase
-        .from("highlights")
-        .select("content,color")
-        .eq("user_id", user.id)
-        .gte("created_at", monthStart.toISOString())
-        .lt("created_at", monthEnd.toISOString())
-        .limit(100); // Limit highlights for performace
+      // Removed highlights query for performance optimization
 
-      let totalWords = 0;
-      const highlightColorCounts: Record<string, number> = { yellow: 0, blue: 0, red: 0 };
+      // Removed favorite book calculation for performance optimization
 
-      for (const h of monthHighlights ?? []) {
-        totalWords += wordsCount(safeString(h.content));
-        const c = safeString(h.color);
-        if (c) highlightColorCounts[c] = (highlightColorCounts[c] ?? 0) + 1;
-      }
+      // Removed moods query for performance optimization
 
-      const dominantColor = dominantColorFromHighlights(highlightColorCounts);
+      // Removed missions query for performance optimization
 
-      // Favorite book removed or simplified as requested to remove "time read" details if needed
-      // but keeping it minimal for "wrapped"
-      const favoriteBookId = "";
-      const favorite = booksById.get(favoriteBookId);
+      // Removed totalPages and totalBooks calculation for performance optimization
 
-      // Mood Stats Calculation
-      // Skipping mood stats fetching if not critical, or limit it.
-      // Already removed heavy processing.
-
-      // Fetch Real Missions from DB
-      // Lazy init: Ensure daily missions exist for today before fetching
-      // @ts-ignore - RPC types not yet generated
-      await supabase.rpc("ensure_daily_missions", { p_user_id: user.id }).catch(() => { });
-
-      const { data: missionsData } = await supabase
-        .from("user_missions")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("created_at", format(new Date(), "yyyy-MM-dd")) // Today's missions
-        .order("created_at", { ascending: true });
-
-      // @ts-ignore - types mismatch might occur until codegen runs
-      const missions = (missionsData ?? []).map((m: any) => ({
-        id: m.id,
-        description: m.description,
-        target: m.target_value,
-        progress: m.current_progress,
-        xpReward: m.reward_xp,
-        isCompleted: m.is_completed,
-        isClaimed: m.is_claimed,
-        type: (m.mission_type === "daily_reading" ? "daily" : m.mission_type === "streak" ? "streak" : "monthly") as any,
-      }));
-
-      // Total pages this month
-      const totalPagesThisMonth = (monthDaily ?? []).reduce(
-        (sum, r) => sum + (typeof r.pages_read === "number" ? r.pages_read : 0),
-        0
-      );
-
-      // Total books this month
-      const totalBooks = new Set((sessions ?? []).map((s) => safeString(s.book_id)).filter(Boolean)).size;
-
-      // Badges (new tables) - we use select('*') to tolerate schema differences.
-      let badges: ReportBadge[] = [];
-      try {
-        const sb = supabase as any;
-
-        const { data: badgeRows, error: badgeErr } = await sb.from("badges").select("*");
-        if (badgeErr) throw badgeErr;
-
-        const { data: userBadgeRows, error: userBadgeErr } = await sb
-          .from("user_badges")
-          .select("*")
-          .eq("user_id", user.id);
-        if (userBadgeErr) throw userBadgeErr;
-
-        const userByBadgeId = new Map<string, any>();
-        for (const ub of userBadgeRows ?? []) {
-          const badgeId = safeString((ub as any).badge_id);
-          if (badgeId) userByBadgeId.set(badgeId, ub);
-        }
-
-        badges = (badgeRows ?? []).map((b: any) => {
-          const id = safeString(b.id);
-          const ub = userByBadgeId.get(id);
-
-          const categoryRaw = safeString(b.category, "behavior");
-          const category: ReportBadgeCategory = categoryRaw === "genre" ? "genre" : "behavior";
-
-          const progress = typeof ub?.progress === "number" ? ub.progress : typeof ub?.current_progress === "number" ? ub.current_progress : undefined;
-          const total = typeof b.total === "number" ? b.total : typeof b.target === "number" ? b.target : undefined;
-
-          const unlocked =
-            ub?.unlocked === true ||
-            typeof ub?.unlocked_at === "string" ||
-            (typeof total === "number" && typeof progress === "number" ? progress >= total : !!ub);
-
-          return {
-            id,
-            name: safeString(b.name),
-            description: safeString(b.description),
-            emoji: safeString(b.emoji, "🏅"),
-            category,
-            unlocked,
-            progress,
-            total,
-          };
-        });
-      } catch {
-        // If tables don't exist yet in the connected project, just show empty.
-        badges = [];
-      }
+      // Removed badges query for performance optimization
 
       const monthLabel = format(monthStart, "LLLL", { locale: vi });
 
       return {
-        badges,
+        badges: [], // Empty - removed for performance
         level: {
           currentXP,
           totalXPForNextLevel,
@@ -364,22 +244,23 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
         wrapped: {
           month: monthLabel,
           year: monthStart.getFullYear(),
-          totalWords,
+          totalWords: 0, // Removed for performance
           favoriteBook: {
-            title: favorite?.title ?? "(Chưa có)",
-            author: favorite?.author ?? "",
-            timeSpent: formatDuration(favoriteSeconds),
+            title: "(Chưa có)",
+            author: "",
+            timeSpent: "0m",
           },
-          dominantColor,
-          totalBooks,
-          totalPages: totalPagesThisMonth,
+          dominantColor: "pink" as const,
+          totalBooks: 0, // Removed for performance
+          totalPages: 0,
           streak: currentStreak,
         },
         moodStats: {
-          counts: moodCounts,
-          total: totalMoodsLogged
+          counts: {},
+          total: 0
         },
-        missions,
+        missions: [], // Empty - removed for performance
+        streak: currentStreak,
       };
     },
   });

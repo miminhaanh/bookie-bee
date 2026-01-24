@@ -1,37 +1,97 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Bell, Mail, Calendar, Zap, MessageCircle, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+type NotificationPreferences = {
+  reminders: boolean;
+  reactions: boolean;
+  challenges: boolean;
+  news: boolean;
+};
+
+const STORAGE_KEY = "bookie_bee_notifications";
 
 const NotificationSettings = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [masterSwitch, setMasterSwitch] = useState(true);
-  const [notifications, setNotifications] = useState({
+  const [notifications, setNotifications] = useState<NotificationPreferences>({
     reminders: true,
     reactions: true,
     challenges: true,
     news: false,
   });
 
+  // Load preferences from localStorage on mount
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    try {
+      const stored = localStorage.getItem(`${STORAGE_KEY}_${user.id}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setNotifications(parsed);
+        
+        // Update master switch based on loaded preferences
+        const allEnabled = Object.values(parsed).every(v => v === true);
+        setMasterSwitch(allEnabled);
+      }
+    } catch (error) {
+      console.error("Failed to load notification preferences:", error);
+    }
+  }, [user?.id]);
+
+  // Save preferences to localStorage whenever they change
+  useEffect(() => {
+    if (!user?.id) return;
+    
+    try {
+      localStorage.setItem(`${STORAGE_KEY}_${user.id}`, JSON.stringify(notifications));
+    } catch (error) {
+      console.error("Failed to save notification preferences:", error);
+    }
+  }, [notifications, user?.id]);
+
   const toggleAll = (val: boolean) => {
     setMasterSwitch(val);
-    setNotifications({
+    const newNotifications = {
       reminders: val,
       reactions: val,
       challenges: val,
       news: val,
+    };
+    setNotifications(newNotifications);
+    
+    toast({
+      title: val ? "Đã bật tất cả thông báo" : "Đã tắt tất cả thông báo",
+      description: "Cài đặt của bạn đã được lưu",
     });
   };
 
   const toggleOne = (key: keyof typeof notifications) => {
     setNotifications(prev => {
       const newState = { ...prev, [key]: !prev[key] };
-      // If any is off, master is off (or logic can be strict) - let's keep it simple
+      
+      // Update master switch if all are enabled/disabled
+      const allEnabled = Object.values(newState).every(v => v === true);
+      const allDisabled = Object.values(newState).every(v => v === false);
+      
+      if (allEnabled) setMasterSwitch(true);
+      if (allDisabled) setMasterSwitch(false);
+      
       return newState;
+    });
+    
+    toast({
+      description: "Đã cập nhật cài đặt thông báo",
     });
   };
 

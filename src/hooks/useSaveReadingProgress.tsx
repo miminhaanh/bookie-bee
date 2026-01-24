@@ -73,12 +73,12 @@ export function useSaveReadingProgress({
         const offset = localDate.getTimezoneOffset() * 60000;
         const localDateStr = new Date(localDate.getTime() - offset).toISOString().split("T")[0];
 
-        supabase.rpc("increment_daily_stats", {
+        (supabase as any).rpc("increment_daily_stats", {
           p_user_id: user?.id,
           p_date: localDateStr,
           p_delta_pages: delta,
           p_delta_seconds: 0 // Seconds are handled by reading session
-        }).then(({ error }) => {
+        }).then(({ error }: any) => {
           if (error) console.error("Failed to update daily stats:", error);
         });
       }

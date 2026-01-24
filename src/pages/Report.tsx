@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
-import { BadgeCollection } from "@/components/reports/BadgeCollection";
-import { BookieWrapped } from "@/components/reports/BookieWrapped";
 import { MissionCard } from "@/components/gamification/MissionCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, Trophy, Sparkles, Quote, Smile, Brain, Plus } from "lucide-react";
+import { BarChart3, Quote, Smile, Plus, Trophy, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { EmotionSelector } from "@/components/gamification/EmotionSelector";
 import { useAuth } from "@/hooks/useAuth";
@@ -89,22 +87,7 @@ const Reports = () => {
                 <p className="text-muted-foreground mt-1 text-sm md:text-base">{greeting}</p>
               </div>
 
-              <TabsList className="bg-white/50 dark:bg-zinc-800/50 p-1 rounded-2xl h-auto shadow-sm backdrop-blur-sm self-center md:self-auto">
-                {[
-                  { value: "overview", icon: BarChart3, label: "Tổng quan" },
-                  { value: "achievements", icon: Trophy, label: "Thành tích" },
-                  { value: "wrapped", icon: Sparkles, label: "Wrapped" },
-                ].map(tab => (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className="rounded-xl px-4 py-2 gap-2 data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700 data-[state=active]:text-primary data-[state=active]:shadow-sm transition-all text-muted-foreground text-xs md:text-sm font-medium"
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              {/* Chỉ hiển thị Tổng quan - đã xóa Thành tích và Wrapped */}
             </div>
 
             <TabsContent value="overview" className="animate-fade-in space-y-6">
@@ -125,33 +108,8 @@ const Reports = () => {
                 />
               </motion.div>
 
-              {/* 2. MIDDLE SECTION (Emotions, Missions, Stats) */}
+              {/* 2. MIDDLE SECTION (Emotions, Missions) */}
               <div className="space-y-6">
-                {/* Stats Grid - Moved to a row above for cleaner hierarchy */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Card className="border-none bg-indigo-50 dark:bg-indigo-900/20 shadow-sm">
-                    <CardContent className="p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-200">
-                        <BarChart3 className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Đã đọc</p>
-                        <p className="text-xl font-bold">{levelData.totalBooksRead} <span className="text-xs font-medium text-muted-foreground">cuốn</span></p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="border-none bg-orange-50 dark:bg-orange-900/20 shadow-sm">
-                    <CardContent className="p-4 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-800 flex items-center justify-center text-orange-600 dark:text-orange-200">
-                        <Quote className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">Thời gian</p>
-                        <p className="text-xl font-bold">{(levelData.totalPagesRead * 1.5 / 60).toFixed(0)} <span className="text-xs font-medium text-muted-foreground">giờ</span></p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
 
                 {/* Main Content Grid: 2 Columns on Desktop */}
                 <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6 items-start">
@@ -218,10 +176,10 @@ const Reports = () => {
                             <Quote className="w-4 h-4" /> Lời nhắn
                           </div>
                           <div className="space-y-3">
-                            <p className="text-lg font-medium text-foreground/80 italic leading-relaxed font-serif">
+                            <p className="text-lg font-medium text-foreground/80 italic leading-relaxed" style={{ fontFamily: "'Noto Serif', 'Times New Roman', serif" }}>
                               "{quote}"
                             </p>
-                            <p className="text-xs text-muted-foreground text-right">— Khuyết danh</p>
+                            <p className="text-xs text-muted-foreground text-right" style={{ fontFamily: "'Inter', 'Segoe UI', sans-serif" }}>— Khuyết danh</p>
                           </div>
                         </CardContent>
                       </Card>
@@ -298,23 +256,6 @@ const Reports = () => {
                 </div>
               </div>
 
-            </TabsContent>
-
-            <TabsContent value="achievements" className="animate-fade-in">
-              <BadgeCollection badges={data?.badges ?? []} />
-            </TabsContent>
-
-            <TabsContent value="wrapped" className="animate-fade-in flex justify-center py-6">
-              <BookieWrapped {...(data?.wrapped ?? {
-                month: "2",
-                year: new Date().getFullYear(),
-                totalWords: 0,
-                favoriteBook: { title: "Chưa có", author: "", timeSpent: "0m" },
-                dominantColor: "pink",
-                totalBooks: 0,
-                totalPages: 0,
-                streak: 0,
-              })} />
             </TabsContent>
           </Tabs>
         </main>

@@ -1,15 +1,153 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Cloud, Download, Trash2, ArrowLeft, RefreshCw, AlertTriangle, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
+import { useBooks } from "@/hooks/useBooks";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const DataSettings = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const lastSyncTime = "Vừa xong"; // Mock
+  const { books } = useBooks();
+  const { toast } = useToast();
+  const [lastSyncTime, setLastSyncTime] = useState("Vừa xong");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Update sync time every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLastSyncTime("Vừa xong");
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleExportData = async () => {
+    if (!user?.id) return;
+
+    setIsExporting(true);
+    try {
+      // Fetch all user data
+      const [
+        { data: profile },
+        { data: dailyReading },
+        { data: sessions },
+        { data: highlights },
+      ] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", user.id).single(),
+        supabase.from("daily_reading").select("*").eq("user_id", user.id),
+        supabase.from("reading_sessions").select("*").eq("user_id", user.id),
+        supabase.from("highlights").select("*").eq("user_id", user.id),
+      ]);
+
+      const exportData = {
+        exported_at: new Date().toISOString(),
+        user_id: user.id,
+        email: user.email,
+        profile,
+        books: books.map(b => ({
+          id: b.id,
+          title: b.title,
+          author: b.author,
+          progress: b.progress,
+          current_page: b.current_page,
+          total_pages: b.total_pages,
+          status: b.status,
+        })),
+        daily_reading: dailyReading,
+        reading_sessions: sessions,
+        highlights,
+      };
+
+      // Create and download JSON file
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bookie-bee-data-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Thành công!",
+        description: "Dữ liệu của bạn đã được xuất",
+      });
+    } catch (error) {
+      console.error("Export error:", error);
+      toast({
+        title: "Lỗi",
+        description: "Không thể xuất dữ liệu. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "XÓA TÀI KHOẢN") {
+      toast({
+        title: "Lỗi",
+        description: "Vui lòng nhập chính xác 'XÓA TÀI KHOẢN' để xác nhận",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      // Call the delete-user edge function
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete account");
+      }
+
+      toast({
+        title: "Tài khoản đã được xóa",
+        description: "Dữ liệu của bạn đã được xóa vĩnh viễn",
+      });
+
+      // Sign out and redirect
+      await supabase.auth.signOut();
+      navigate("/auth");
+    } catch (error: any) {
+      console.error("Delete account error:", error);
+      toast({
+        title: "Lỗi",
+        description: error.message || "Không thể xóa tài khoản. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setDeleteConfirmText("");
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -64,12 +202,18 @@ const DataSettings = () => {
 
           {/* Actions List */}
           <section className="bg-white/60 rounded-3xl border border-white/60 shadow-sm backdrop-blur-sm overflow-hidden">
-            <button className="w-full p-4 hover:bg-white transition-colors flex items-center gap-4 border-b border-slate-100">
+            <button 
+              onClick={handleExportData}
+              disabled={isExporting}
+              className="w-full p-4 hover:bg-white transition-colors flex items-center gap-4 border-b border-slate-100 disabled:opacity-50"
+            >
               <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
                 <Download className="w-5 h-5" />
               </div>
               <div className="flex-1 text-left">
-                <h4 className="text-sm font-bold text-slate-700">Xuất dữ liệu cá nhân</h4>
+                <h4 className="text-sm font-bold text-slate-700">
+                  {isExporting ? "Đang xuất dữ liệu..." : "Xuất dữ liệu cá nhân"}
+                </h4>
                 <p className="text-xs text-slate-500">Tải về bản sao lưu gồm lịch sử đọc và ghi chú</p>
               </div>
             </button>
@@ -88,13 +232,56 @@ const DataSettings = () => {
                   <p className="text-sm text-red-700/70 mt-1 leading-relaxed">
                     Hành động này không thể hoàn tác. Mọi dữ liệu đọc sách, ghi chú và thành tích sẽ bị xóa vĩnh viễn khỏi hệ thống.
                   </p>
-                  <Button
-                    variant="destructive"
-                    className="mt-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-red-200 shadow-lg"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Xóa tài khoản vĩnh viễn
-                  </Button>
+                  <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        className="mt-4 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl shadow-red-200 shadow-lg"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Xóa tài khoản vĩnh viễn
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Xóa tài khoản vĩnh viễn</DialogTitle>
+                        <DialogDescription>
+                          Hành động này không thể hoàn tác. Tất cả dữ liệu của bạn sẽ bị xóa vĩnh viễn.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                          <p className="text-sm text-red-900 font-medium mb-2">
+                            Để xác nhận, vui lòng nhập: <strong>XÓA TÀI KHOẢN</strong>
+                          </p>
+                          <Input
+                            value={deleteConfirmText}
+                            onChange={(e) => setDeleteConfirmText(e.target.value)}
+                            placeholder="Nhập XÓA TÀI KHOẢN"
+                            className="mt-2"
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setIsDeleteDialogOpen(false);
+                            setDeleteConfirmText("");
+                          }}
+                        >
+                          Hủy
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={handleDeleteAccount}
+                          disabled={isDeleting || deleteConfirmText !== "XÓA TÀI KHOẢN"}
+                        >
+                          {isDeleting ? "Đang xóa..." : "Xóa vĩnh viễn"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               </div>
             </div>

@@ -67,12 +67,12 @@ const Dashboard = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [{ data: books }, { data: profile }] = await Promise.all([
+        const [{ data: books }, { data: profile, error: profileError }] = await Promise.all([
           supabase
             .from("books")
             .select("id,title,author,cover_url,progress,status")
             .eq("user_id", user.id),
-          supabase
+          (supabase as any)
             .from("profiles")
             .select(
               "avatar_url, display_name, onboarding_completed, welcome_banner_seen, current_streak"
@@ -80,6 +80,10 @@ const Dashboard = () => {
             .eq("user_id", user.id)
             .maybeSingle(),
         ]);
+
+        if (profileError) {
+          console.warn("Dashboard profile fetch warning:", profileError.message);
+        }
 
         const allBooks = books ?? [];
 
@@ -131,7 +135,7 @@ const Dashboard = () => {
   /* ===================== HANDLERS ===================== */
   const completeOnboarding = async () => {
     if (!user) return;
-    await supabase
+    await (supabase as any)
       .from("profiles")
       .update({ onboarding_completed: true })
       .eq("user_id", user.id);
@@ -142,7 +146,7 @@ const Dashboard = () => {
 
   const handleWelcomeBannerClick = async () => {
     if (!user) return;
-    await supabase
+    await (supabase as any)
       .from("profiles")
       .update({ welcome_banner_seen: true })
       .eq("user_id", user.id);

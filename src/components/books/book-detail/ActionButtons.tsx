@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Share2, Edit, Flag, Play } from "lucide-react";
+import { Share2, Pencil, Play, Heart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import type { Book } from "@/hooks/useBooks";
 
 interface ActionButtonsProps {
@@ -17,6 +19,7 @@ export function ActionButtons({
   onStartReading,
 }: ActionButtonsProps) {
   const { toast } = useToast();
+  const [isLiked, setIsLiked] = useState(false);
 
   const handleShare = async () => {
     const url = window.location.href;
@@ -37,42 +40,45 @@ export function ActionButtons({
   };
 
   return (
-    <section className="flex flex-wrap items-center gap-3 border-b border-[#F0E6DB] pb-9">
+    <div className="flex flex-wrap gap-3 mb-8">
       <Button
+        size="lg"
+        className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-95 text-primary-foreground shadow-lg hover:shadow-xl transition-all rounded-xl"
         onClick={onStartReading}
-        className="gap-2 rounded-[12px] border border-transparent bg-[#F26B3A] px-7 py-3 text-base font-semibold text-white shadow-none transition-colors hover:bg-[#E05B2D]"
       >
-        <Play className="h-5 w-5" />
-        {book.current_page && book.current_page > 0 ? "Đọc tiếp" : "Bắt đầu đọc"}
+        <Play className="w-5 h-5" />
+        {book.current_page && book.current_page > 0 ? "Tiếp tục đọc" : "Bắt đầu đọc"}
       </Button>
 
       <Button
-        onClick={handleShare}
-        variant="ghost"
-        className="gap-2 rounded-[10px] border border-[#EEDAC6] bg-transparent px-5 py-3 text-sm font-medium text-[#3B2A1E] hover:bg-[#FFF3E8]"
+        variant="outline"
+        size="lg"
+        className={cn(
+          "gap-2 rounded-xl transition-all",
+          isLiked && "bg-primary/10 border-primary/30 text-primary"
+        )}
+        onClick={() => setIsLiked((v) => !v)}
       >
-        <Share2 className="h-5 w-5" />
+        <Heart className={cn("w-5 h-5", isLiked && "fill-primary")} />
+        {isLiked ? "Đã thích" : "Yêu thích"}
+      </Button>
+
+      <Button variant="outline" size="lg" className="gap-2 rounded-xl" onClick={handleShare}>
+        <Share2 className="w-5 h-5" />
         Chia sẻ
       </Button>
 
       {canEdit && (
         <Button
+          variant="outline"
+          size="lg"
+          className="gap-2 rounded-xl"
           onClick={onEditClick}
-          variant="ghost"
-          className="gap-2 rounded-[10px] border border-[#EEDAC6] bg-transparent px-5 py-3 text-sm font-medium text-[#3B2A1E] hover:bg-[#FFF3E8]"
         >
-          <Edit className="h-4 w-4" />
-          Sửa
+          <Pencil className="w-5 h-5" />
+          Chỉnh sửa
         </Button>
       )}
-
-      <Button
-        variant="ghost"
-        className="gap-2 rounded-[10px] border border-[#EEDAC6] bg-transparent px-5 py-3 text-sm font-medium text-[#3B2A1E] hover:bg-[#FFF3E8]"
-      >
-        <Flag className="h-4 w-4" />
-        Báo cáo
-      </Button>
-    </section>
+    </div>
   );
 }

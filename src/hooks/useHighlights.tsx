@@ -58,10 +58,10 @@ export const useHighlights = (bookId?: string) => {
         .from("highlights")
         .insert([{ ...highlight, user_id: userId }])
         .select()
-        .single();
+        .limit(1);
 
       if (error) throw error;
-      return data as Highlight;
+      return (data?.[0] ?? null) as Highlight;
     },
     onSuccess: () => {
       if (!userId) return;

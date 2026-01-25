@@ -59,24 +59,24 @@ const Dashboard = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [{ data: books }, { data: profile, error: profileError }] = await Promise.all([
+        // ✅ Use .limit(1) instead of .single()/.maybeSingle() - safer approach
+        const [{ data: books }, { data: profileData, error: profileError }] = await Promise.all([
           supabase
             .from("books")
             .select("id,title,author,cover_url,progress,status")
             .eq("user_id", user.id),
-          (supabase as any)
+          supabase
             .from("profiles")
-            .select(
-              "avatar_url, display_name, onboarding_completed, current_streak"
-            )
+            .select("avatar_url, display_name, current_streak, onboarding_completed")
             .eq("user_id", user.id)
-            .maybeSingle(),
+            .limit(1),
         ]);
 
         if (profileError) {
           console.warn("Dashboard profile fetch warning:", profileError.message);
         }
 
+        const profile = profileData?.[0] ?? null;
         const allBooks = books ?? [];
 
         setBooksReading(allBooks.filter((b) => b.status === "reading"));
@@ -90,7 +90,15 @@ const Dashboard = () => {
         setProfileAvatarUrl(profile?.avatar_url ?? null);
         setProfileDisplayName(profile?.display_name ?? null);
 
-        setOnboardingCompleted(profile?.onboarding_completed ?? false);
+        // ✅ Use onboarding_completed from DB (after adding column)
+        // Fallback: if column doesn't exist yet, use hasBooks as indicator
+        const dbOnboarding = (profile as any)?.onboarding_completed;
+        if (typeof dbOnboarding === "boolean") {
+          setOnboardingCompleted(dbOnboarding);
+        } else {
+          // Fallback for migration period: user has books = completed onboarding
+          setOnboardingCompleted(allBooks.length > 0);
+        }
       } catch (err) {
         console.error("Dashboard fetch error:", err);
       } finally {
@@ -118,18 +126,43 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user || loading) return;
     if (!onboardingCompleted && !hasAnyBooks) {
-      setRunTour(true);
+      const timer = setTimeout(() => {
+        const targetsReady =
+          !!document.querySelector(".profile-card-tour") &&
+          !!document.querySelector(".sidebar-add-book") &&
+          !!document.querySelector(".nav-reports");
+
+        if (targetsReady) {
+          setRunTour(true);
+        }
+      }, 300);
+
+      return () => clearTimeout(timer);
     }
   }, [user, loading, onboardingCompleted, hasAnyBooks]);
 
   const handleTourFinish = async () => {
     setRunTour(false);
-    if (!user) return;
-    await (supabase as any)
-      .from("profiles")
-      .update({ onboarding_completed: true })
-      .eq("user_id", user.id);
     setOnboardingCompleted(true);
+    
+    // ✅ Persist onboarding_completed to DB (after adding column)
+    if (user) {
+      try {
+        await supabase
+          .from("profiles")
+          .upsert(
+            {
+              user_id: user.id,
+              onboarding_completed: true,
+              updated_at: new Date().toISOString(),
+            } as any,
+            { onConflict: "user_id" }
+          );
+      } catch (err) {
+        console.warn("Failed to update onboarding_completed:", err);
+        // Non-critical - continue anyway
+      }
+    }
   };
 
   /* ===================== RENDER ===================== */

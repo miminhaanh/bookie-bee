@@ -29,7 +29,7 @@ export const TranslationDialog = ({
       }}
     >
       <div
-        className="w-full max-w-2xl rounded-2xl border border-border bg-background/70 p-4 shadow-float backdrop-blur-xl"
+        className="glass-translate-card p-4 animate-in slide-in-from-bottom-4 duration-300"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label="Bản dịch"

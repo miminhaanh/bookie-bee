@@ -1,4 +1,4 @@
-import { BookOpen, ListTree } from "lucide-react";
+import { FileText, List } from "lucide-react";
 import { normalizeTocItems, flattenToc, type TocRowV2 } from "./utils";
 
 interface BookInfoTabsProps {
@@ -11,46 +11,54 @@ export function BookInfoTabs({ description, tocData }: BookInfoTabsProps) {
   const rows = flattenToc(items);
 
   return (
-    <section className="grid gap-12 border-b border-[#F0E6DB] pb-12 md:grid-cols-2">
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-[#B37A5B]">
-          <BookOpen className="h-4 w-4" strokeWidth={1.6} />
-          <h3 className="text-base font-semibold text-[#2D1F16]">Giới thiệu</h3>
+    <div className="grid gap-8 md:grid-cols-2">
+      {/* Introduction */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-lavender to-sky flex items-center justify-center">
+            <FileText className="w-6 h-6 text-primary-foreground" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Giới thiệu</h2>
         </div>
         {description ? (
-          <p className="whitespace-pre-wrap text-[15px] leading-[1.7] text-[#4C3A2F]">
+          <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">
             {description}
           </p>
         ) : (
-          <p className="text-sm italic text-[#9D8775]">Chưa có mô tả</p>
+          <p className="text-sm italic text-muted-foreground">Chưa có mô tả</p>
         )}
       </div>
 
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-[#B37A5B]">
-          <ListTree className="h-4 w-4" strokeWidth={1.6} />
-          <h3 className="text-base font-semibold text-[#2D1F16]">Mục lục</h3>
+      {/* Table of Contents */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sage to-soft-sage flex items-center justify-center">
+            <List className="w-6 h-6 text-primary-foreground" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Mục lục</h2>
         </div>
         {rows.length > 0 ? (
-          <div className="space-y-1.5 text-sm text-[#4C3A2F]">
+          <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
             {rows.map((r: TocRowV2, idx: number) => (
               <div
                 key={`${r.title}-${idx}`}
-                className="flex items-center gap-3 border-b border-[#F8ECE0] py-1"
-                style={{ paddingLeft: `${r.depth * 1.25}rem` }}
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-muted/50 transition-all cursor-pointer"
+                style={{ paddingLeft: `${r.depth * 1.25 + 0.75}rem` }}
               >
-                <span className="text-xs font-semibold uppercase tracking-wide text-[#BCA08A]">
-                  {r.label}
-                </span>
-                <span className="flex-1">{r.title}</span>
-                <span className="text-xs text-[#BCA08A]">{r.page}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {r.label}
+                  </span>
+                  <span className="text-foreground">{r.title}</span>
+                </div>
+                <span className="text-xs text-muted-foreground">{r.page}</span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm italic text-[#9D8775]">Chưa có mục lục</p>
+          <p className="text-sm italic text-muted-foreground">Chưa có mục lục</p>
         )}
       </div>
-    </section>
+    </div>
   );
 }

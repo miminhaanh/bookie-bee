@@ -54,92 +54,93 @@ export const ReaderBottomBar = ({
   return (
     <footer
       className={cn(
-        "fixed bottom-3 left-1/2 z-50 w-[calc(100%-1.5rem)] -translate-x-1/2 transition-transform duration-300 safe-area-bottom",
+        "fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 safe-area-bottom",
         showUI ? "translate-y-0" : "translate-y-full",
-        "max-w-[980px] rounded-2xl border border-border/60 bg-background/85 shadow-sm backdrop-blur-md"
       )}
+      onClick={(e) => e.stopPropagation()}
     >
-      <div className="px-3 py-2">
-        {/* Progress */}
-        <div className="mb-2 flex items-center justify-between text-[11px] text-muted-foreground">
-          <span className="flex items-center gap-1">
-            Trang
-            <span className="inline-flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              {currentPageInput}
-              <span>/</span>
-              {numberOfPagesComponent}
-            </span>
-          </span>
-          <span>{progressPercent}%</span>
-        </div>
-
-        {/* Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onScrollModeChange(ScrollMode.Vertical)}
-              className={cn(
-                "rounded-xl border px-3 py-1.5 text-xs font-medium transition-all",
-                "hover:scale-[1.02]",
-                scrollMode === ScrollMode.Vertical
-                  ? "border-foreground/20 bg-foreground/10"
-                  : "border-border bg-background"
-              )}
-            >
-              Dọc
-            </button>
-            <button
-              type="button"
-              onClick={() => onScrollModeChange(ScrollMode.Horizontal)}
-              className={cn(
-                "rounded-xl border px-3 py-1.5 text-xs font-medium transition-all",
-                "hover:scale-[1.02]",
-                scrollMode === ScrollMode.Horizontal
-                  ? "border-foreground/20 bg-foreground/10"
-                  : "border-border bg-background"
-              )}
-            >
-              Ngang
-            </button>
-
-            {scrollMode === ScrollMode.Horizontal && (
-              <div className="ml-1 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => onViewModeChange(false)}
-                  className={cn(
-                    "rounded-xl border px-2.5 py-1 text-[11px] font-medium transition-all",
-                    "hover:scale-[1.02]",
-                    !isDualPage ? "border-foreground/20 bg-foreground/10" : "border-border bg-background"
-                  )}
-                >
-                  1 trang
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onViewModeChange(true)}
-                  disabled={isDualPageDisabled}
-                  className={cn(
-                    "rounded-xl border px-2.5 py-1 text-[11px] font-medium transition-all",
-                    "hover:scale-[1.02]",
-                    isDualPage ? "border-foreground/20 bg-foreground/10" : "border-border bg-background",
-                    isDualPageDisabled ? "cursor-not-allowed opacity-50" : ""
-                  )}
-                >
-                  2 trang
-                </button>
-              </div>
-            )}
+      <div className="glass-card border-t border-border/50 px-4 py-3">
+        <div className="container mx-auto">
+          {/* Progress bar */}
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <span className="text-xs text-muted-foreground">Trang {currentPage}</span>
+            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <span className="text-xs text-muted-foreground">{numPages ?? totalPages ?? "-"}</span>
           </div>
 
-          {scrollMode === ScrollMode.Horizontal ? (
+          {/* Controls */}
+          <div className="grid grid-cols-3 items-center text-sm" onClick={(e) => e.stopPropagation()}>
+            {/* Left: Scroll mode */}
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onScrollModeChange(ScrollMode.Vertical)}
+                className={cn(
+                  "rounded-xl border px-3 py-1.5 text-xs font-medium transition-all",
+                  "hover:scale-[1.02]",
+                  scrollMode === ScrollMode.Vertical
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border bg-background"
+                )}
+              >
+                Dọc
+              </button>
+              <button
+                type="button"
+                onClick={() => onScrollModeChange(ScrollMode.Horizontal)}
+                className={cn(
+                  "rounded-xl border px-3 py-1.5 text-xs font-medium transition-all",
+                  "hover:scale-[1.02]",
+                  scrollMode === ScrollMode.Horizontal
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border bg-background"
+                )}
+              >
+                Ngang
+              </button>
+
+              {scrollMode === ScrollMode.Horizontal && (
+                <div className="ml-1 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onViewModeChange(false)}
+                    className={cn(
+                      "rounded-xl border px-2.5 py-1 text-[11px] font-medium transition-all",
+                      "hover:scale-[1.02]",
+                      !isDualPage ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-background"
+                    )}
+                  >
+                    1 trang
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onViewModeChange(true)}
+                    disabled={isDualPageDisabled}
+                    className={cn(
+                      "rounded-xl border px-2.5 py-1 text-[11px] font-medium transition-all",
+                      "hover:scale-[1.02]",
+                      isDualPage ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-background",
+                      isDualPageDisabled ? "cursor-not-allowed opacity-50" : ""
+                    )}
+                  >
+                    2 trang
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Center: Page navigation */}
+            <div className="flex items-center justify-center gap-2">
               <Button
                 variant="outline"
                 size="icon"
                 aria-label="Trang trước"
-                className="rounded-xl transition-all hover:scale-[1.02]"
+                className="h-8 w-8 rounded-xl transition-all hover:scale-[1.02]"
                 onClick={(e) => {
                   e.stopPropagation();
                   onPreviousPage?.();
@@ -149,34 +150,17 @@ export const ReaderBottomBar = ({
                 <ChevronLeft className="h-4 w-4" />
               </Button>
 
-              <div className="flex items-center gap-2">
-                {zoomOutButton}
-                <div className="flex items-center gap-1 rounded-xl border border-border bg-background px-2 py-1">
-                  <input
-                    value={zoomInput}
-                    onChange={(e) => onZoomInputChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") onZoomInputCommit();
-                    }}
-                    onFocus={onZoomInputFocus}
-                    onBlur={() => {
-                      onZoomInputCommit();
-                      onZoomInputBlur?.();
-                    }}
-                    inputMode="numeric"
-                    className="w-10 bg-transparent text-[11px] text-foreground/80 outline-none"
-                    aria-label="Zoom"
-                  />
-                  <span className="text-[11px] text-muted-foreground">%</span>
-                </div>
-                {zoomInButton}
+              <div className="flex items-center gap-1 rounded-xl border border-border bg-background/80 px-2 py-1 backdrop-blur">
+                {currentPageInput}
+                <span className="mx-1 text-muted-foreground">/</span>
+                {numberOfPagesComponent}
               </div>
 
               <Button
                 variant="outline"
                 size="icon"
                 aria-label="Trang sau"
-                className="rounded-xl transition-all hover:scale-[1.02]"
+                className="h-8 w-8 rounded-xl transition-all hover:scale-[1.02]"
                 onClick={(e) => {
                   e.stopPropagation();
                   onNextPage?.();
@@ -186,15 +170,11 @@ export const ReaderBottomBar = ({
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-          ) : (
-            <div className="flex items-center gap-2">
+
+            {/* Right: Zoom controls */}
+            <div className="flex items-center justify-end gap-2">
               {zoomOutButton}
-              <div className="flex h-9 items-center justify-center rounded-xl border border-border bg-background px-2 text-xs" aria-label="Nhảy đến trang">
-                {currentPageInput}
-                <span className="mx-1 text-muted-foreground">/</span>
-                {numberOfPagesComponent}
-              </div>
-              <div className="flex items-center gap-1 rounded-xl border border-border bg-background px-2 py-1">
+              <div className="flex items-center gap-1 rounded-xl border border-border bg-background/80 px-2 py-1 backdrop-blur">
                 <input
                   value={zoomInput}
                   onChange={(e) => onZoomInputChange(e.target.value)}
@@ -207,14 +187,14 @@ export const ReaderBottomBar = ({
                     onZoomInputBlur?.();
                   }}
                   inputMode="numeric"
-                  className="w-10 bg-transparent text-[11px] text-foreground/80 outline-none"
+                  className="w-10 bg-transparent text-[11px] text-center text-foreground/80 outline-none"
                   aria-label="Zoom"
                 />
                 <span className="text-[11px] text-muted-foreground">%</span>
               </div>
               {zoomInButton}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </footer>

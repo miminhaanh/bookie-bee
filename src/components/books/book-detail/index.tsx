@@ -48,11 +48,26 @@ export function BookDetailContainer() {
   // Fetch highlights
   const { highlights } = useHighlights(id || "");
 
-  // Update book mutation
+  // Update book mutation - ✅ Dùng upsert thay update để tránh CORS PATCH
   const updateMutation = useMutation({
     mutationFn: async (updates: Partial<Book>) => {
-      if (!id) throw new Error("No book ID");
-      const { error } = await supabase.from("books").update(updates).eq("id", id);
+      if (!id || !book) throw new Error("No book ID");
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Phiên đăng nhập đã hết hạn");
+
+      // Dùng upsert (POST) thay vì update (PATCH)
+      const { error } = await supabase
+        .from("books")
+        .upsert(
+          {
+            ...book,
+            ...updates,
+            id,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
       if (error) throw error;
     },
     onSuccess: () => {
@@ -148,32 +163,46 @@ export function BookDetailContainer() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFCF8]">
-      <div className="mx-auto max-w-5xl px-6 py-12">
-        <header className="mb-8 flex items-center justify-between">
-          <Button variant="ghost" className="px-0 text-[#111]" onClick={() => navigate(-1)}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+    <div className="min-h-screen overflow-hidden bg-background">
+      {/* Decorative Background */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-warm-pink/30 to-coral/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-1/3 -left-40 w-80 h-80 bg-gradient-to-br from-lavender/30 to-sky/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-20 w-72 h-72 bg-gradient-to-br from-sage/30 to-soft-sage/20 rounded-full blur-3xl" />
+        <div className="absolute bottom-40 left-1/3 w-60 h-60 bg-gradient-to-br from-peach/30 to-soft-pink/20 rounded-full blur-3xl" />
+      </div>
+
+      <main className="container mx-auto px-4 py-6">
+        {/* Back + actions */}
+        <div className="flex items-center justify-between mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="w-4 h-4" />
             Quay lại
           </Button>
 
           {user?.id === book.user_id && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-[#111]">
+                <Button variant="ghost" size="icon">
                   <MoreVertical className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setShowDeleteDialog(true)}>
+                <DropdownMenuItem onClick={() => setShowDeleteDialog(true)} className="text-destructive">
                   <Trash2 className="mr-2 h-4 w-4" />
                   Xóa sách
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
-        </header>
+        </div>
 
-        <div className="space-y-0">
+        <div className="space-y-10">
           <BookHero book={book} />
 
           {((book.format && book.format !== "pdf") || !book.file_url) && (
@@ -197,19 +226,26 @@ export function BookDetailContainer() {
             totalPages={book.total_pages || 0}
           />
 
-          <BookInfoTabs description={book.description} tocData={book.toc} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
+              <BookInfoTabs description={book.description} tocData={book.toc} />
+            </div>
+            <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
+              <ReadingHistory
+                startedAt={(book as any).started_at}
+                lastReadAt={(book as any).last_read_at}
+                currentPage={book.current_page || 0}
+                totalPages={book.total_pages || 0}
+              />
+            </div>
+          </div>
 
-          <ReadingHistory
-            startedAt={(book as any).started_at}
-            lastReadAt={(book as any).last_read_at}
-            currentPage={book.current_page || 0}
-            totalPages={book.total_pages || 0}
-          />
-
-          <HighlightsSection
-            highlights={highlights || []}
-            onDeleteHighlight={(hid) => deleteHighlightMutation.mutate(hid)}
-          />
+          <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
+            <HighlightsSection
+              highlights={highlights || []}
+              onDeleteHighlight={(hid) => deleteHighlightMutation.mutate(hid)}
+            />
+          </div>
         </div>
 
         <BookDetailModals
@@ -221,7 +257,7 @@ export function BookDetailContainer() {
           onEditOpenChange={setIsEditOpen}
           onSaveEdit={handleSaveEdit}
         />
-      </div>
+      </main>
     </div>
   );
 }

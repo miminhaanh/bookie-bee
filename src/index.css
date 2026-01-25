@@ -179,6 +179,13 @@
     box-shadow: var(--shadow-card);
   }
 
+  .glass-translate-card {
+    @apply bg-card/90 backdrop-blur-lg border border-border/60 rounded-2xl;
+    box-shadow: var(--shadow-float);
+    max-width: 400px;
+    width: 100%;
+  }
+
   .cozy-shadow {
     box-shadow: var(--shadow-soft);
   }

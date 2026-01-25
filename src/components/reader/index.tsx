@@ -364,6 +364,7 @@ const ReaderContainer = () => {
       <ReaderTopBar
         showUI={showUI}
         bookTitle={book?.title ?? "Đang đọc"}
+        bookAuthor={book?.author}
         onBack={() => {
           endSession();
           navigate(`/book/${id}`);

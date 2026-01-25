@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 interface ReaderTopBarProps {
   showUI: boolean;
   bookTitle: string | null;
+  bookAuthor?: string | null;
   onBack: () => void;
   rightSlot?: React.ReactNode;
 }
@@ -12,31 +13,35 @@ interface ReaderTopBarProps {
 export const ReaderTopBar = ({
   showUI,
   bookTitle,
+  bookAuthor,
   onBack,
   rightSlot,
 }: ReaderTopBarProps) => {
   return (
     <header
       className={cn(
-        "fixed top-3 left-1/2 z-50 w-[calc(100%-1.5rem)] -translate-x-1/2 transition-transform duration-300 safe-area-top",
+        "fixed top-0 left-0 right-0 z-50 transition-transform duration-300 safe-area-top",
         showUI ? "translate-y-0" : "-translate-y-full",
-        "max-w-[980px] rounded-2xl border border-border/60 bg-background/85 shadow-sm backdrop-blur-md"
+        "bg-background/80 backdrop-blur-sm border-b border-border"
       )}
     >
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center justify-between px-2 py-1.5">
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={onBack}
-          className="gap-1.5 rounded-xl transition-all hover:scale-[1.02]"
         >
           <ArrowLeft className="h-4 w-4" />
-          <span className="hidden sm:inline">Quay lại</span>
         </Button>
 
-        <h1 className="text-sm font-medium truncate max-w-[240px] text-foreground/90">
-          {bookTitle ?? "Đang đọc"}
-        </h1>
+        <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-2 text-center">
+          <p className="w-full break-words whitespace-normal text-sm font-bold leading-tight">
+            {bookTitle ?? "Đang đọc"}
+          </p>
+          <p className="w-full break-words whitespace-normal text-xs font-normal leading-tight text-muted-foreground">
+            {bookAuthor?.trim() ? bookAuthor : "Không rõ tác giả"}
+          </p>
+        </div>
 
         <div className="flex items-center gap-2">{rightSlot}</div>
       </div>

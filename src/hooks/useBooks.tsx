@@ -46,10 +46,17 @@ export const useBooks = () => {
     queryFn: async () => {
       if (!user?.id) return [];
 
+      // ✅ Verify session is valid before querying
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.warn("No valid session for books query");
+        return [];
+      }
+
       const { data, error } = await supabase
         .from("books")
         .select("*")
-        .eq("user_id", user.id)
+        // ✅ KHÔNG cần .eq("user_id", user.id) vì RLS đã filter theo auth.uid()
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
@@ -67,17 +74,28 @@ export const useBooks = () => {
     return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
   });
 
+  // ✅ FIX: KHÔNG gửi user_id - để Supabase tự set từ auth.uid() qua DEFAULT
   const addBook = useMutation({
     mutationFn: async (book: Omit<Book, "id" | "user_id" | "created_at" | "updated_at">) => {
-      if (!user?.id) throw new Error("No user");
+      // Verify session trước khi insert
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
 
+      // ✅ KHÔNG truyền user_id - RLS + DEFAULT sẽ tự xử lý
       const { data, error } = await supabase
         .from("books")
-        .insert([{ ...book, user_id: user.id }])
+        .insert(book) // ← Chỉ truyền book data, KHÔNG có user_id
         .select()
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Insert book error:", error);
+        if (error.code === "42501" || error.message.includes("policy")) {
+          throw new Error("Không có quyền thêm sách. Vui lòng đăng nhập lại.");
+        }
+        throw error;
+      }
+      
       return data as Book;
     },
     onSuccess: () => {
@@ -86,17 +104,40 @@ export const useBooks = () => {
     },
   });
 
+  // ✅ FIX: Dùng upsert thay update để tránh CORS PATCH
   const updateBook = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Book> & { id: string }) => {
-      if (!user?.id) throw new Error("No user");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
 
+      // Lấy book hiện tại để merge với updates
+      const { data: existingBook, error: fetchError } = await supabase
+        .from("books")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (fetchError || !existingBook) {
+        throw new Error("Không tìm thấy sách để cập nhật");
+      }
+
+      // ✅ Dùng upsert (POST) thay vì update (PATCH) để tránh CORS
       const { error } = await supabase
         .from("books")
-        .update(updates)
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .upsert(
+          {
+            ...existingBook,
+            ...updates,
+            id, // Giữ nguyên id
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" }
+        );
 
-      if (error) throw error;
+      if (error) {
+        console.error("Update book error:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["books", user?.id] });
@@ -106,13 +147,14 @@ export const useBooks = () => {
 
   const deleteBook = useMutation({
     mutationFn: async (id: string) => {
-      if (!user?.id) throw new Error("No user");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
 
       const { error } = await supabase
         .from("books")
         .delete()
-        .eq("id", id)
-        .eq("user_id", user.id);
+        .eq("id", id);
+        // ✅ KHÔNG cần .eq("user_id", user.id) vì RLS đã filter
 
       if (error) throw error;
     },

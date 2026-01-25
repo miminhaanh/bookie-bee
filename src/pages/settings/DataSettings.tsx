@@ -38,12 +38,12 @@ const DataSettings = () => {
     try {
       // Fetch all user data
       const [
-        { data: profile },
+        { data: profileData },
         { data: dailyReading },
         { data: sessions },
         { data: highlights },
       ] = await Promise.all([
-        supabase.from("profiles").select("*").eq("user_id", user.id).single(),
+        supabase.from("profiles").select("*").eq("user_id", user.id).limit(1),
         supabase.from("daily_reading").select("*").eq("user_id", user.id),
         supabase.from("reading_sessions").select("*").eq("user_id", user.id),
         supabase.from("highlights").select("*").eq("user_id", user.id),
@@ -53,7 +53,7 @@ const DataSettings = () => {
         exported_at: new Date().toISOString(),
         user_id: user.id,
         email: user.email,
-        profile,
+        profile: profileData?.[0] ?? null,
         books: books.map(b => ({
           id: b.id,
           title: b.title,

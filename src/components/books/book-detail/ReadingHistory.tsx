@@ -1,3 +1,4 @@
+import { Clock } from "lucide-react";
 import { formatViDate } from "./utils";
 
 interface ReadingHistoryProps {
@@ -14,35 +15,41 @@ export function ReadingHistory({
   totalPages,
 }: ReadingHistoryProps) {
   const remainingPages = totalPages > 0 ? Math.max(0, totalPages - currentPage) : null;
-  const estimatedMinutes = remainingPages !== null ? remainingPages : 0;
-  const hours = Math.floor(estimatedMinutes / 60);
-  const mins = estimatedMinutes % 60;
+  const estimatedMinutes = remainingPages !== null ? Math.round(remainingPages * 1.5) : null;
+  const estimatedHoursRaw = estimatedMinutes !== null ? estimatedMinutes / 60 : null;
+  const estimatedHoursDisplay =
+    typeof estimatedHoursRaw === "number"
+      ? Math.max(0.1, estimatedHoursRaw >= 10 ? Math.round(estimatedHoursRaw) : Math.round(estimatedHoursRaw * 10) / 10)
+      : null;
 
   return (
-    <section className="space-y-4 border-b border-[#E5E5E5] pb-10">
-      <h3 className="text-base font-semibold text-[#111]">Lịch sử đọc</h3>
-      <div className="grid gap-6 text-sm text-[#666] sm:grid-cols-3">
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-[#999]">Bắt đầu</p>
-          <p className="text-lg font-semibold text-[#111]">{formatViDate(startedAt)}</p>
+    <div>
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center">
+          <Clock className="w-6 h-6 text-primary-foreground" />
         </div>
-
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-[#999]">Gần nhất</p>
-          <p className="text-lg font-semibold text-[#111]">{formatViDate(lastReadAt)}</p>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Lịch sử đọc</h2>
+          <p className="text-sm text-muted-foreground">Theo dõi hành trình đọc của bạn</p>
         </div>
+      </div>
 
-        <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-[#999]">Ước tính còn lại</p>
-          <p className="text-lg font-semibold text-[#111]">
-            {remainingPages === null
-              ? "-"
-              : remainingPages <= 0
-                ? "Đã hoàn thành"
-                : `${hours > 0 ? `${hours}h ` : ""}${mins > 0 ? `${mins}phút` : ""}`}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="p-4 rounded-xl bg-gradient-to-br from-soft-pink/50 to-transparent border border-warm-pink/20">
+          <p className="text-sm text-muted-foreground mb-1">Bắt đầu</p>
+          <p className="font-bold text-foreground">{formatViDate(startedAt)}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-gradient-to-br from-soft-sage/50 to-transparent border border-sage/20">
+          <p className="text-sm text-muted-foreground mb-1">Gần nhất</p>
+          <p className="font-bold text-foreground">{formatViDate(lastReadAt)}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-gradient-to-br from-lavender/30 to-transparent border border-lavender/20">
+          <p className="text-sm text-muted-foreground mb-1">Ước tính còn lại</p>
+          <p className="font-bold text-foreground">
+            {typeof estimatedHoursDisplay === "number" ? `~${estimatedHoursDisplay} giờ` : "-"}
           </p>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

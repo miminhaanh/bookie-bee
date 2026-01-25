@@ -1,3 +1,6 @@
+import { Sparkles } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+
 interface ReadingProgressProps {
   currentPage: number;
   totalPages: number;
@@ -9,20 +12,23 @@ export function ReadingProgress({ currentPage, totalPages }: ReadingProgressProp
   const percentage = Math.min(100, Math.round((currentPage / totalPages) * 100));
 
   return (
-    <section className="space-y-3 border-b border-[#F0E6DB] pb-9">
-      <div className="flex items-baseline justify-between text-sm">
-        <span className="font-semibold text-[#3B2A1E]">Tiến độ đọc</span>
-        <span className="text-[#9A7D65]">{percentage}%</span>
+    <div className="rounded-3xl p-6 space-y-4 border border-border/60 bg-card/60 backdrop-blur mb-6">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-primary" />
+          Tiến độ đọc
+        </h3>
+        <span className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+          {percentage}%
+        </span>
       </div>
 
-      <div className="h-[4px] w-full rounded-full bg-[#F5E9DC]">
-        <div
-          className="h-full rounded-full bg-[#F26B3A] transition-all"
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
+      <Progress value={percentage} className="h-3 bg-muted" />
 
-      <p className="text-sm text-[#7B6658]">Đã đọc {currentPage} / {totalPages} trang</p>
-    </section>
+      <div className="flex justify-between text-sm text-muted-foreground">
+        <span>Trang {currentPage} / {totalPages}</span>
+        <span>Còn {Math.max(0, totalPages - currentPage)} trang</span>
+      </div>
+    </div>
   );
 }

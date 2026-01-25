@@ -106,13 +106,13 @@ export const useReportsData = (opts?: { forDate?: Date }) => {
       }
 
       // Profile
-      const { data: profile, error: profileError } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("current_streak, bonus_xp") // bonus_xp added in migration
         .eq("user_id", user.id)
-        .maybeSingle();
+        .limit(1);
 
-      const p = profile as any; // Cast to any to avoid type errors before codegen
+      const p = (profileData?.[0] ?? null) as any; // Cast to any to avoid type errors before codegen
       const currentStreak = p?.current_streak ?? 0;
 
       // Books (for totals + favorite book map)

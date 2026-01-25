@@ -22,11 +22,11 @@ export const useReadingSession = (bookId: string) => {
           started_at: new Date().toISOString(),
         }])
         .select()
-        .single();
+        .limit(1);
 
       if (error) throw error;
       
-      sessionIdRef.current = data.id;
+      sessionIdRef.current = data?.[0]?.id ?? null;
       startTimeRef.current = new Date();
     } catch (error) {
       console.error("Failed to start reading session:", error);
@@ -63,15 +63,16 @@ export const useReadingSession = (bookId: string) => {
         // Update or insert daily reading
         const today = format(new Date(), "yyyy-MM-dd");
         
-        const { data: existingDaily, error: dailyError } = await supabase
+        const { data: dailyData, error: dailyError } = await supabase
           .from("daily_reading")
           .select("*")
           .eq("user_id", user.id)
           .eq("date", today)
-          .maybeSingle();
+          .limit(1);
 
         if (dailyError) throw dailyError;
 
+        const existingDaily = dailyData?.[0] ?? null;
         if (existingDaily) {
           await supabase
             .from("daily_reading")
@@ -109,12 +110,13 @@ export const useReadingSession = (bookId: string) => {
     if (!user?.id) return;
 
     try {
-      const { data: profile } = await supabase
+      const { data: profileData } = await supabase
         .from("profiles")
         .select("current_streak, longest_streak, last_read_date")
         .eq("user_id", user.id)
-        .single();
+        .limit(1);
 
+      const profile = profileData?.[0] ?? null;
       if (!profile) return;
 
       const today = format(new Date(), "yyyy-MM-dd");

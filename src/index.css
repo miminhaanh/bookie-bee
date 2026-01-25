@@ -81,10 +81,10 @@
     --sidebar-border: 35 25% 92%;
     --sidebar-ring: 350 80% 65%;
 
-    /* Highlight colors (pastel) */
-    --highlight-yellow: 48 95% 80%;
-    --highlight-blue: 200 95% 82%;
-    --highlight-red: 0 95% 82%;
+    /* Highlight colors (pastel - more transparent) */
+    --highlight-yellow: 48 100% 75% / 0.4;
+    --highlight-blue: 200 100% 75% / 0.4;
+    --highlight-red: 0 100% 75% / 0.4;
   }
 
   .dark {
@@ -186,6 +186,74 @@
     width: 100%;
   }
 
+  .bg-toolbar-bg {
+    background-color: hsl(var(--card));
+  }
+
+  .bg-reader-bg {
+    background-color: hsl(var(--cream));
+  }
+
+  .bg-reader-page {
+    background-color: hsl(var(--card));
+  }
+
+  .bg-reader-page-alt {
+    background-color: hsl(var(--muted));
+  }
+
+  .text-icon {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .bg-progress-track {
+    background-color: hsl(var(--muted));
+  }
+
+  .toolbar-shadow {
+    box-shadow: 0 -12px 32px -16px hsl(25 30% 20% / 0.35);
+  }
+
+  .reader-shadow {
+    box-shadow: 0 12px 36px -18px hsl(25 35% 25% / 0.35);
+  }
+
+  .reader-shadow-left {
+    box-shadow: -18px 16px 32px -22px hsl(25 35% 25% / 0.4);
+  }
+
+  .reader-shadow-right {
+    box-shadow: 18px 16px 32px -22px hsl(25 35% 25% / 0.4);
+  }
+
+  .btn-bounce {
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+
+  .btn-bounce:hover {
+    transform: translateY(-1px) scale(1.03);
+  }
+
+
+  @keyframes pageFlipLeft {
+    0% {
+      transform: perspective(1200px) rotateY(0deg);
+      filter: brightness(1);
+    }
+    30% {
+      transform: perspective(1200px) rotateY(8deg) translateX(2%);
+      filter: brightness(0.95);
+    }
+    60% {
+      transform: perspective(1200px) rotateY(4deg) translateX(1%);
+      filter: brightness(0.98);
+    }
+    100% {
+      transform: perspective(1200px) rotateY(0deg);
+      filter: brightness(1);
+    }
+  }
+
   .cozy-shadow {
     box-shadow: var(--shadow-soft);
   }
@@ -254,6 +322,36 @@
   }
   50% {
     opacity: 0.7;
+  }
+}
+
+@keyframes slide-up {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out forwards;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out forwards;
   }
 }
 

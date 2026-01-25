@@ -1,6 +1,6 @@
 import { useParams, useLocation } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Minus, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -9,7 +9,6 @@ import {
   type PageChangeEvent,
   ScrollMode,
   ViewMode,
-  type ZoomEvent,
 } from "@react-pdf-viewer/core";
 import {
   highlightPlugin,
@@ -22,6 +21,7 @@ import { useReaderCore } from "./hooks/useReaderCore";
 import { PDFViewerContainer } from "./parts/PDFViewerContainer";
 import { ReaderTopBar } from "./parts/ReaderTopBar";
 import { ReaderBottomBar } from "./parts/ReaderBottomBar";
+import { SettingsPanel } from "./parts/SettingsPanel";
 import { TranslationDialog } from "./overlays/TranslationDialog";
 
 const ReaderContainer = () => {
@@ -40,6 +40,7 @@ const ReaderContainer = () => {
     authLoading,
     showUI,
     theme,
+    setTheme,
     currentPage,
     setCurrentPage,
     scrollMode,
@@ -72,42 +73,33 @@ const ReaderContainer = () => {
     findOverlappingHighlightIds,
     colorToBackground,
     deleteHighlightFromDb,
+    addHighlight,
     totalPages,
     isBookLoading,
     bookLoadError,
+    hydratedPage,
+    isHydrated,
   } = core;
-  const { ZoomIn, ZoomOut } = zoomPluginInstance;
-  const { CurrentPageInput, NumberOfPages } = pageNavigationPluginInstance;
   const currentTheme = themeStyles[theme];
   const isPdfFile = fileUrl.toLowerCase().endsWith(".pdf");
   const didJumpToQueryPageRef = useRef(false);
   const queryPageRef = useRef<number | null>(null);
-  const denomForProgress = numPages ?? totalPages ?? 1;
-  const progressPercent = Math.min(100, Math.max(0, Math.round((currentPage / denomForProgress) * 100)));
-  const [zoomScale, setZoomScale] = useState(1);
-  const [zoomInput, setZoomInput] = useState("100");
-  const [isEditingZoom, setIsEditingZoom] = useState(false);
-  const [preferredViewMode, setPreferredViewMode] = useState<ViewMode>(ViewMode.DualPage);
+  const progressPercent = Math.min(100, Math.max(0, Math.round((currentPage / (numPages ?? totalPages ?? 1)) * 100)));
   const [isNarrow, setIsNarrow] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [brightness, setBrightness] = useState(100);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const pdfLoadedRef = useRef(false);
 
   const effectiveViewMode = useMemo(() => {
     if (scrollMode !== ScrollMode.Horizontal) return ViewMode.SinglePage;
     if (isNarrow) return ViewMode.SinglePage;
-    return preferredViewMode;
-  }, [scrollMode, isNarrow, preferredViewMode]);
+    return ViewMode.DualPage;
+  }, [scrollMode, isNarrow]);
 
-  useEffect(() => {
-    const savedViewMode = localStorage.getItem("readerViewMode");
-    if (savedViewMode === "single") setPreferredViewMode(ViewMode.SinglePage);
-    if (savedViewMode === "dual") setPreferredViewMode(ViewMode.DualPage);
+  const effectiveScale = useMemo(() => {
+    return SpecialZoomLevel.PageFit as unknown as number;
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "readerViewMode",
-      preferredViewMode === ViewMode.DualPage ? "dual" : "single"
-    );
-  }, [preferredViewMode]);
 
   useEffect(() => {
     const update = () => setIsNarrow(window.innerWidth < 1024);
@@ -115,6 +107,23 @@ const ReaderContainer = () => {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
+
+  const jumpSpread = useCallback(
+    (direction: "next" | "prev") => {
+      if (scrollMode === ScrollMode.Horizontal && !isNarrow && effectiveViewMode === ViewMode.DualPage) {
+        const delta = direction === "next" ? 1 : -1;
+        const target = Math.min(
+          Math.max(currentPage + delta, 1),
+          numPages ?? totalPages ?? currentPage
+        );
+        pageNavigationPluginInstance.jumpToPage(target - 1);
+        return;
+      }
+      if (direction === "next") pageNavigationPluginInstance.jumpToNextPage();
+      else pageNavigationPluginInstance.jumpToPreviousPage();
+    },
+    [scrollMode, isNarrow, effectiveViewMode, currentPage, numPages, totalPages, pageNavigationPluginInstance]
+  );
 
   // Parse query page from URL
   useEffect(() => {
@@ -125,6 +134,26 @@ const ReaderContainer = () => {
     didJumpToInitialPageRef.current = false;
   }, [location.search]);
 
+  // Jump to saved page after BOTH: 1) PDF loaded, 2) hydration completed
+  useEffect(() => {
+    if (!pdfLoadedRef.current || !isHydrated || !numPages) return;
+    if (didJumpToInitialPageRef.current) return;
+    
+    const requestedPage = queryPageRef.current;
+    const target = requestedPage ?? hydratedPage;
+    if (!target || target <= 1) return;
+
+    const clamped = Math.min(Math.max(target, 1), numPages);
+    try {
+      pageNavigationPluginInstance.jumpToPage(clamped - 1);
+      setCurrentPage(clamped);
+      setHasVisitedPage(true);
+      didJumpToInitialPageRef.current = true;
+    } catch (err) {
+      console.warn("Failed to jump to saved page:", err);
+    }
+  }, [isHydrated, hydratedPage, numPages, pageNavigationPluginInstance, setCurrentPage, setHasVisitedPage]);
+
   // Redirect to auth if needed
   const shouldRedirectToAuth = !authLoading && !user;
   useEffect(() => {
@@ -132,11 +161,6 @@ const ReaderContainer = () => {
     const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
     navigate(`/auth?returnUrl=${returnUrl}`, { replace: true });
   }, [navigate, shouldRedirectToAuth]);
-
-  useEffect(() => {
-    if (isEditingZoom) return;
-    setZoomInput(String(Math.round(zoomScale * 100)));
-  }, [zoomScale, isEditingZoom]);
 
   useEffect(() => {
     if (scrollMode !== ScrollMode.Horizontal) return;
@@ -147,16 +171,16 @@ const ReaderContainer = () => {
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        pageNavigationPluginInstance.jumpToPreviousPage();
+        jumpSpread("prev");
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        pageNavigationPluginInstance.jumpToNextPage();
+        jumpSpread("next");
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [scrollMode, pageNavigationPluginInstance]);
+  }, [scrollMode, jumpSpread]);
 
   // Prefetch PDF blob
   useEffect(() => {
@@ -301,29 +325,18 @@ const ReaderContainer = () => {
   const handlePdfDocumentLoad = useCallback(
     (e: DocumentLoadEvent) => {
       setNumPages(e.doc.numPages);
+      pdfLoadedRef.current = true;
 
       if (book && (!book.total_pages || book.total_pages <= 0) && e.doc.numPages > 0) {
         updateBook.mutate({ id: book.id, total_pages: e.doc.numPages });
       }
 
-      const requestedPage = queryPageRef.current;
-      const target = requestedPage ?? core.hydratedPage;
-      if (!target) return;
-      if (requestedPage && didJumpToQueryPageRef.current) return;
-      if (!requestedPage && didJumpToInitialPageRef.current) return;
+      // Ensure scroll mode is synced after PDF loads
+      scrollModePluginInstance.switchScrollMode(scrollMode);
 
-      const clamped = Math.min(Math.max(target, 1), e.doc.numPages);
-      try {
-        pageNavigationPluginInstance.jumpToPage(clamped - 1);
-        setCurrentPage(clamped);
-        setHasVisitedPage(true);
-        if (requestedPage) didJumpToQueryPageRef.current = true;
-        else didJumpToInitialPageRef.current = true;
-      } catch (err) {
-        console.warn("Failed to jump to initial page:", err);
-      }
+      // Initial jump will be handled by the separate useEffect that waits for isHydrated
     },
-    [setNumPages, book, updateBook, core.hydratedPage, pageNavigationPluginInstance, setCurrentPage, setHasVisitedPage]
+    [setNumPages, book, updateBook, scrollModePluginInstance, scrollMode]
   );
 
   const handlePdfPageChange = useCallback(
@@ -331,6 +344,7 @@ const ReaderContainer = () => {
       core.handleScroll();
       setHasVisitedPage(true);
       const newPage = e.currentPage + 1;
+
       setCurrentPage(newPage);
 
       // Auto-complete book when reaching the last page
@@ -407,15 +421,36 @@ const ReaderContainer = () => {
         error={translateError}
       />
 
+      {/* Settings Panel */}
+      <SettingsPanel
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        brightness={brightness}
+        onBrightnessChange={setBrightness}
+        theme={theme}
+        onThemeChange={setTheme}
+        scrollMode={scrollMode}
+        onScrollModeChange={(mode) => {
+          setScrollMode(mode);
+          scrollModePluginInstance.switchScrollMode(mode);
+          localStorage.setItem("readerScrollMode", mode.toString());
+        }}
+        zoomLevel={zoomLevel}
+        onZoomChange={(level) => {
+          setZoomLevel(level);
+          zoomPluginInstance.zoomTo(level);
+        }}
+      />
+
       {/* Top Bar */}
       <ReaderTopBar
         showUI={showUI}
         bookTitle={book?.title ?? "Đang đọc"}
-        bookAuthor={book?.author}
         onBack={() => {
           endSession();
           navigate(`/book/${id}`);
         }}
+        onSettingsClick={() => setIsSettingsOpen(true)}
       />
 
       {/* Subtle progress indicator (vertical mode) */}
@@ -430,49 +465,46 @@ const ReaderContainer = () => {
         </div>
       )}
 
-      {/* Viewer */}
+      {/* Viewer - Fullscreen */}
       {pdfBlobUrl ? (
-        <div className="absolute inset-0 flex justify-center px-4 pb-24 pt-16 sm:px-8">
-          <div className="h-full w-full max-w-[920px]">
-            <PDFViewerContainer
-              fileUrl={pdfBlobUrl}
-              plugins={[
-                highlightPluginInstance,
-                scrollModePluginInstance,
-                bookmarkPluginInstance,
-                pageNavigationPluginInstance,
-                zoomPluginInstance,
-              ]}
-              onDocumentLoad={handlePdfDocumentLoad}
-              onPageChange={handlePdfPageChange}
-              onZoom={(e: ZoomEvent) => setZoomScale(e.scale)}
-              viewMode={effectiveViewMode}
-              defaultScale={SpecialZoomLevel.PageFit as unknown as number}
-            />
+        <div 
+          className="absolute inset-0"
+          style={{ filter: `brightness(${brightness / 100})` }}
+        >
+          <div className="h-full w-full px-4 lg:px-8">
+            <div className="mx-auto h-full w-full max-w-[1400px]">
+              <PDFViewerContainer
+                fileUrl={pdfBlobUrl}
+                plugins={[
+                  highlightPluginInstance,
+                  scrollModePluginInstance,
+                  bookmarkPluginInstance,
+                  pageNavigationPluginInstance,
+                  zoomPluginInstance,
+                ]}
+                onDocumentLoad={handlePdfDocumentLoad}
+                onPageChange={handlePdfPageChange}
+                viewMode={effectiveViewMode}
+                defaultScale={effectiveScale}
+              />
+            </div>
           </div>
 
-          {scrollMode === ScrollMode.Horizontal && (
-            <>
-              <button
-                type="button"
-                aria-label="Trang trước"
-                className="absolute left-0 top-0 h-full w-14 cursor-pointer bg-transparent"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  pageNavigationPluginInstance.jumpToPreviousPage();
-                }}
-              />
-              <button
-                type="button"
-                aria-label="Trang sau"
-                className="absolute right-0 top-0 h-full w-14 cursor-pointer bg-transparent"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  pageNavigationPluginInstance.jumpToNextPage();
-                }}
-              />
-            </>
-          )}
+          {/* Tap zones for page navigation - only visible edges */}
+          <div
+            className="absolute left-0 top-0 h-full w-12 cursor-pointer z-20"
+            onClick={(e) => {
+              e.stopPropagation();
+              jumpSpread("prev");
+            }}
+          />
+          <div
+            className="absolute right-0 top-0 h-full w-12 cursor-pointer z-20"
+            onClick={(e) => {
+              e.stopPropagation();
+              jumpSpread("next");
+            }}
+          />
         </div>
       ) : (
         <div className="flex h-full items-center justify-center">
@@ -484,67 +516,14 @@ const ReaderContainer = () => {
       <ReaderBottomBar
         showUI={showUI}
         currentPage={currentPage}
-        totalPages={totalPages}
-        scrollMode={scrollMode}
-        numPages={numPages}
-        onScrollModeChange={(mode) => {
-          setScrollMode(mode);
-          scrollModePluginInstance.switchScrollMode(mode);
-          localStorage.setItem("readerScrollMode", mode.toString());
+        totalPages={numPages ?? totalPages}
+        onSeek={(page) => {
+          const max = numPages ?? totalPages ?? 1;
+          const clamped = Math.min(Math.max(page, 1), max);
+          pageNavigationPluginInstance.jumpToPage(clamped - 1);
+          setCurrentPage(clamped);
+          setHasVisitedPage(true);
         }}
-        isDualPage={effectiveViewMode === ViewMode.DualPage}
-        isDualPageDisabled={isNarrow}
-        onViewModeChange={(isDual) => {
-          setPreferredViewMode(isDual ? ViewMode.DualPage : ViewMode.SinglePage);
-        }}
-        currentPageInput={<CurrentPageInput />}
-        numberOfPagesComponent={<NumberOfPages />}
-        zoomInButton={
-          <ZoomIn>
-            {(props) => (
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-xl transition-all hover:scale-[1.02]"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.onClick();
-                }}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            )}
-          </ZoomIn>
-        }
-        zoomOutButton={
-          <ZoomOut>
-            {(props) => (
-              <Button
-                variant="outline"
-                size="icon"
-                className="rounded-xl transition-all hover:scale-[1.02]"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.onClick();
-                }}
-              >
-                <Minus className="h-4 w-4" />
-              </Button>
-            )}
-          </ZoomOut>
-        }
-        zoomInput={zoomInput}
-        onZoomInputChange={setZoomInput}
-        onZoomInputCommit={() => {
-          const parsed = Number(zoomInput);
-          if (!Number.isFinite(parsed)) return;
-          const clamped = Math.min(400, Math.max(25, parsed));
-          zoomPluginInstance.zoomTo(clamped / 100);
-        }}
-        onZoomInputFocus={() => setIsEditingZoom(true)}
-        onZoomInputBlur={() => setIsEditingZoom(false)}
-        onPreviousPage={() => pageNavigationPluginInstance.jumpToPreviousPage()}
-        onNextPage={() => pageNavigationPluginInstance.jumpToNextPage()}
       />
     </div>
   );

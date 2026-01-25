@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBooks } from "@/hooks/useBooks";
 import { useHighlights } from "@/hooks/useHighlights";
 import { useToast } from "@/hooks/use-toast";
+import { usePdfToc } from "@/hooks/usePdfToc";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,46 @@ export function BookDetailContainer() {
 
   // Fetch highlights
   const { highlights } = useHighlights(id || "");
+
+  // Extract TOC from PDF automatically
+  const { toc: extractedToc, isLoading: tocLoading } = usePdfToc(book?.file_url);
+
+  // Auto-save extracted TOC to book if book has no TOC
+  useEffect(() => {
+    if (!id || !book || !extractedToc || extractedToc.length === 0) return;
+    
+    // Chỉ lưu nếu book chưa có TOC
+    const existingToc = book.toc as Array<{ title: string; page: number }> | null;
+    if (existingToc && existingToc.length > 0) return;
+
+    // Lưu TOC vào database
+    const saveToc = async () => {
+      try {
+        const { error } = await supabase
+          .from("books")
+          .update({ toc: extractedToc })
+          .eq("id", id);
+        
+        if (error) {
+          console.error("Error saving TOC:", error);
+        } else {
+          console.log("✅ TOC extracted and saved from PDF");
+          qc.invalidateQueries({ queryKey: ["books"] });
+        }
+      } catch (err) {
+        console.error("Error saving TOC:", err);
+      }
+    };
+
+    saveToc();
+  }, [id, book, extractedToc, qc]);
+
+  // Determine which TOC to show: existing from DB or extracted from PDF
+  const effectiveToc = useMemo(() => {
+    const existingToc = book?.toc as Array<{ title: string; page: number }> | null;
+    if (existingToc && existingToc.length > 0) return existingToc;
+    return extractedToc;
+  }, [book?.toc, extractedToc]);
 
   // Update book mutation - ✅ Dùng upsert thay update để tránh CORS PATCH
   const updateMutation = useMutation({
@@ -228,7 +269,11 @@ export function BookDetailContainer() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
-              <BookInfoTabs description={book.description} tocData={book.toc} />
+              <BookInfoTabs 
+                description={book.description} 
+                tocData={effectiveToc} 
+                tocLoading={tocLoading && !effectiveToc?.length}
+              />
             </div>
             <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
               <ReadingHistory

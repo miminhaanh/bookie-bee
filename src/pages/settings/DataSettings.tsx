@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
+import { useDeleteAccount } from "@/hooks/useDeleteAccount";
 import { useBooks } from "@/hooks/useBooks";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +22,7 @@ const DataSettings = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
+  const { deleteAccount, isDeleting, progress } = useDeleteAccount();
 
   // Update sync time every minute
   useEffect(() => {
@@ -54,6 +55,12 @@ const DataSettings = () => {
         user_id: user.id,
         email: user.email,
         profile: profileData?.[0] ?? null,
+        local_settings: {
+          reading: localStorage.getItem(`reading_settings_${user.id}`),
+          privacy: localStorage.getItem(`privacy_settings_${user.id}`),
+          notification: localStorage.getItem(`notification_settings_${user.id}`),
+          translate_history: localStorage.getItem(`translate_history_${user.id}`),
+        },
         books: books.map(b => ({
           id: b.id,
           title: b.title,
@@ -105,35 +112,8 @@ const DataSettings = () => {
       return;
     }
 
-    setIsDeleting(true);
     try {
-      // Call the delete-user edge function
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No session");
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to delete account");
-      }
-
-      toast({
-        title: "Tài khoản đã được xóa",
-        description: "Dữ liệu của bạn đã được xóa vĩnh viễn",
-      });
-
-      // Sign out and redirect
-      await supabase.auth.signOut();
+      await deleteAccount();
       navigate("/auth");
     } catch (error: any) {
       console.error("Delete account error:", error);
@@ -143,7 +123,6 @@ const DataSettings = () => {
         variant: "destructive",
       });
     } finally {
-      setIsDeleting(false);
       setIsDeleteDialogOpen(false);
       setDeleteConfirmText("");
     }
@@ -250,17 +229,32 @@ const DataSettings = () => {
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
-                        <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                          <p className="text-sm text-red-900 font-medium mb-2">
-                            Để xác nhận, vui lòng nhập: <strong>XÓA TÀI KHOẢN</strong>
-                          </p>
-                          <Input
-                            value={deleteConfirmText}
-                            onChange={(e) => setDeleteConfirmText(e.target.value)}
-                            placeholder="Nhập XÓA TÀI KHOẢN"
-                            className="mt-2"
-                          />
-                        </div>
+                        {progress ? (
+                          <div className="space-y-3">
+                            <p className="text-sm text-red-900 font-medium">{progress.step}</p>
+                            <div className="w-full bg-red-100 rounded-full h-2">
+                              <div
+                                className="bg-red-500 h-2 rounded-full transition-all"
+                                style={{ width: `${(progress.progress / progress.total) * 100}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-red-700 text-center">
+                              {progress.progress} / {progress.total}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                            <p className="text-sm text-red-900 font-medium mb-2">
+                              Để xác nhận, vui lòng nhập: <strong>XÓA TÀI KHOẢN</strong>
+                            </p>
+                            <Input
+                              value={deleteConfirmText}
+                              onChange={(e) => setDeleteConfirmText(e.target.value)}
+                              placeholder="Nhập XÓA TÀI KHOẢN"
+                              className="mt-2"
+                            />
+                          </div>
+                        )}
                       </div>
                       <DialogFooter>
                         <Button

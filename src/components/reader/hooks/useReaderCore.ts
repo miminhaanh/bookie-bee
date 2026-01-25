@@ -108,14 +108,14 @@ export const useReaderCore = (bookId: string) => {
   const lastHighlightSelectionCrashAtRef = useRef(0);
   const didJumpToInitialPageRef = useRef(false);
 
-  // Hooks
-  const { addHighlight, deleteHighlight } = useHighlights(bookId);
-
-  // Plugins
+  // Plugins (call directly at top-level; plugin factories use hooks internally)
   const scrollModePluginInstance = scrollModePlugin();
   const bookmarkPluginInstance = bookmarkPlugin();
   const pageNavigationPluginInstance = pageNavigationPlugin();
   const zoomPluginInstance = zoomPlugin();
+
+  // Hooks
+  const { addHighlight, deleteHighlight } = useHighlights(bookId);
 
   useEffect(() => {
     if (!user?.id || !bookId) return;
@@ -170,12 +170,16 @@ export const useReaderCore = (bookId: string) => {
     const savedLineHeight = localStorage.getItem("readerLineHeight");
 
     if (savedScrollMode) {
-      setScrollMode(parseInt(savedScrollMode) as unknown as ScrollMode);
+      const mode = parseInt(savedScrollMode) as unknown as ScrollMode;
+      setScrollMode(mode);
+      // Sync plugin with loaded scroll mode
+      scrollModePluginInstance.switchScrollMode(mode);
     }
     if (savedTheme) setTheme(savedTheme as ReaderTheme);
     if (savedFontSize) setFontSize(Number(savedFontSize));
     if (savedFontFamily) setFontFamily(savedFontFamily as "sans" | "serif");
     if (savedLineHeight) setLineHeight(Number(savedLineHeight));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load translate history

@@ -26,9 +26,48 @@ serve(async (req) => {
 
     // 2. Initialize Admin Client
     // WARNING: 'SUPABASE_SERVICE_ROLE_KEY' must be set in Edge Function Secrets
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
+      console.error('Missing SUPABASE_URL, SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY')
+      return new Response(
+        JSON.stringify({ error: 'Server misconfiguration' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 2. Verify User Token with ANON client
+    const supabaseUser = createClient(
+      supabaseUrl,
+      anonKey,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        },
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+      }
+    )
+
+    const { data: { user }, error: userError } = await supabaseUser.auth.getUser()
+
+    if (userError || !user) {
+      console.error('User auth failed:', userError)
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized', details: userError?.message }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 3. Initialize Admin Client (SERVICE ROLE)
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl,
+      serviceRoleKey,
       {
         auth: {
           autoRefreshToken: false,
@@ -37,22 +76,18 @@ serve(async (req) => {
       }
     )
 
-    // 3. Verify User Token
-    // We use getUser() to ensure the token is valid and get the User ID securely
-    const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
-
-    if (authError || !user) {
-      console.error('Auth verification failed:', authError)
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: authError?.message }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     console.log(`Starting deletion for user: ${user.id}`)
 
-    // 4. Delete Database Records
+    // 4. Load profile (for avatar path cleanup)
+    const { data: profileData } = await supabaseAdmin
+      .from('profiles')
+      .select('avatar_url')
+      .eq('user_id', user.id)
+      .limit(1)
+
+    const profile = profileData?.[0] ?? null
+
+    // 5. Delete Database Records
     // We try to delete from child tables first to avoid FK constraints, 
     // although CASCADE should handle it, manual is safer for cleanup scripts.
     const tables = ['highlights', 'reading_sessions', 'daily_reading', 'books', 'profiles']
@@ -67,10 +102,10 @@ serve(async (req) => {
       }
     }
 
-    // 5. Delete Storage Files
+    // 6. Delete Storage Files
     // Iterate over known buckets.
     // 'avatars' bucket must be cleaned to prevents "Ghost Avatar" on re-register.
-    const buckets = ['book-files', 'book-covers', 'avatars']
+    const buckets = ['book-files', 'book-covers']
 
     for (const bucket of buckets) {
       try {
@@ -83,23 +118,39 @@ serve(async (req) => {
           if (removeError) console.error(`Error removing files from ${bucket}:`, removeError)
           else console.log(`Removed ${filePaths.length} files from ${bucket}`)
         }
-
-        // Also try to list root if files are not in folders (unlikely for user specific) 
-        // Note: 'avatars' usually stores as 'avatar.png' or user_id as filename at root?
-        // Standard Supabase starter often uses 'avatars' bucket with filename = path.
-        // Let's check if the user has a file named simply `{user_id}` in avatars or something.
-        // But safe bet is folder `user_id/*`.
-
-        // Handling generic avatars bucket structure:
-        // Sometimes avatars are stored as `public/avatar1.png`. 
-        // If the user uploaded it, it should be under their folder or reference.
-        // Since we can't search by metadata easily without DB, we rely on the folders.
       } catch (e) {
         console.error(`Storage error for bucket ${bucket}:`, e)
       }
     }
 
-    // 6. Delete Auth User (Final Step)
+    // Avatars: files are stored under "avatars/<userId>-<timestamp>.*"
+    try {
+      const { data: avatarFiles } = await supabaseAdmin.storage
+        .from('avatars')
+        .list('avatars', { search: `${user.id}-` })
+
+      if (avatarFiles && avatarFiles.length > 0) {
+        const avatarPaths = avatarFiles.map(f => `avatars/${f.name}`)
+        const { error: removeAvatarError } = await supabaseAdmin.storage
+          .from('avatars')
+          .remove(avatarPaths)
+
+        if (removeAvatarError) console.error('Error removing avatars:', removeAvatarError)
+        else console.log(`Removed ${avatarPaths.length} avatar files`)
+      }
+    } catch (e) {
+      console.error('Storage error for bucket avatars:', e)
+    }
+
+    // Fallback: remove avatar by URL (if stored outside the expected folder)
+    if (profile?.avatar_url) {
+      const match = String(profile.avatar_url).match(/avatars\/(.+)$/)
+      if (match?.[1]) {
+        await supabaseAdmin.storage.from('avatars').remove([`avatars/${match[1]}`])
+      }
+    }
+
+    // 7. Delete Auth User (Final Step)
     const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(user.id)
 
     if (deleteUserError) {

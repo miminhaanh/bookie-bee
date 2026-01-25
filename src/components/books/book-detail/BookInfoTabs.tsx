@@ -1,12 +1,13 @@
-import { FileText, List } from "lucide-react";
+import { FileText, List, Loader2 } from "lucide-react";
 import { normalizeTocItems, flattenToc, type TocRowV2 } from "./utils";
 
 interface BookInfoTabsProps {
   description: string | null;
   tocData: unknown;
+  tocLoading?: boolean;
 }
 
-export function BookInfoTabs({ description, tocData }: BookInfoTabsProps) {
+export function BookInfoTabs({ description, tocData, tocLoading }: BookInfoTabsProps) {
   const items = normalizeTocItems(tocData);
   const rows = flattenToc(items);
 
@@ -37,7 +38,12 @@ export function BookInfoTabs({ description, tocData }: BookInfoTabsProps) {
           </div>
           <h2 className="text-xl font-bold text-foreground">Mục lục</h2>
         </div>
-        {rows.length > 0 ? (
+        {tocLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Đang trích xuất mục lục từ PDF...</span>
+          </div>
+        ) : rows.length > 0 ? (
           <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
             {rows.map((r: TocRowV2, idx: number) => (
               <div

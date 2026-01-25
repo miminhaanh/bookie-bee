@@ -112,12 +112,12 @@ export const findOverlappingHighlightIds = (
 export const colorToBackground = (color: DbHighlight["color"]) => {
   switch (color) {
     case "blue":
-      return "hsl(var(--highlight-blue))";
+      return "hsla(200, 100%, 75%, 0.35)";
     case "red":
-      return "hsl(var(--highlight-red))";
+      return "hsla(0, 100%, 75%, 0.35)";
     case "yellow":
     default:
-      return "hsl(var(--highlight-yellow))";
+      return "hsla(48, 100%, 70%, 0.4)";
   }
 };
 

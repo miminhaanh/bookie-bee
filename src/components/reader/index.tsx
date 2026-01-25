@@ -237,10 +237,34 @@ const ReaderContainer = () => {
             const newHighlights = await core.fetchPageHighlights(user.id, id, currentPage);
             setPageHighlights(newHighlights);
           }}
+          onTranslateRequest={async (source: string, target: string) => {
+            // Open translation dialog and start translating
+            setTranslateSourceText(source);
+            setTranslatedText("");
+            setTranslateError(null);
+            setIsTranslateOpen(true);
+            setIsTranslating(true);
+
+            try {
+              const result = await core.translateText(source, target);
+              if (result.error) {
+                setTranslateError(result.error);
+              } else if (result.translatedText) {
+                setTranslatedText(result.translatedText);
+                // Save to history
+                const historyItem = core.createTranslateHistoryItem(source, result.translatedText, target);
+                core.setTranslateHistory((prev) => [historyItem, ...prev.slice(0, 49)]);
+              }
+            } catch (err) {
+              setTranslateError(err instanceof Error ? err.message : "Dịch thất bại");
+            } finally {
+              setIsTranslating(false);
+            }
+          }}
         />
       );
     },
-    [user, id, currentPage, pageHighlights, core, setPageHighlights, findOverlappingHighlightIds, deleteHighlightFromDb]
+    [user, id, currentPage, pageHighlights, core, setPageHighlights, findOverlappingHighlightIds, deleteHighlightFromDb, setTranslateSourceText, setTranslatedText, setTranslateError, setIsTranslateOpen, setIsTranslating]
   );
 
   const renderHighlights = useCallback(
@@ -306,9 +330,32 @@ const ReaderContainer = () => {
     (e: PageChangeEvent) => {
       core.handleScroll();
       setHasVisitedPage(true);
-      setCurrentPage(e.currentPage + 1);
+      const newPage = e.currentPage + 1;
+      setCurrentPage(newPage);
+
+      // Auto-complete book when reaching the last page
+      const totalPagesCount = numPages ?? totalPages;
+      if (
+        book &&
+        book.status !== "completed" &&
+        totalPagesCount &&
+        newPage >= totalPagesCount
+      ) {
+        // Mark book as completed
+        updateBook.mutate(
+          { id: book.id, status: "completed", progress: 100, current_page: totalPagesCount },
+          {
+            onSuccess: () => {
+              core.toast({
+                title: "🎉 Chúc mừng!",
+                description: `Bạn đã hoàn thành "${book.title}"`,
+              });
+            },
+          }
+        );
+      }
     },
-    [core, setHasVisitedPage, setCurrentPage]
+    [core, setHasVisitedPage, setCurrentPage, numPages, totalPages, book, updateBook]
   );
 
   if (authLoading || isBookLoading) {

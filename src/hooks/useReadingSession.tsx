@@ -51,14 +51,17 @@ export const useReadingSession = (bookId: string) => {
         .eq("id", sessionIdRef.current);
     } else {
       try {
-        // Update session with end time
+        // ✅ Use upsert for reading_sessions to avoid CORS PATCH
         await supabase
           .from("reading_sessions")
-          .update({
+          .upsert({
+            id: sessionIdRef.current,
+            user_id: user.id,
+            book_id: bookId,
+            started_at: startTimeRef.current.toISOString(),
             ended_at: endTime.toISOString(),
             duration_seconds: durationSeconds,
-          })
-          .eq("id", sessionIdRef.current);
+          }, { onConflict: "id" });
 
         // Update or insert daily reading
         const today = format(new Date(), "yyyy-MM-dd");
@@ -74,13 +77,14 @@ export const useReadingSession = (bookId: string) => {
 
         const existingDaily = dailyData?.[0] ?? null;
         if (existingDaily) {
+          // ✅ Use upsert for daily_reading to avoid CORS PATCH
           await supabase
             .from("daily_reading")
-            .update({
+            .upsert({
+              ...existingDaily,
               total_seconds: (existingDaily.total_seconds ?? 0) + durationSeconds,
               books_count: (existingDaily.books_count ?? 0) + 1,
-            })
-            .eq("id", existingDaily.id);
+            }, { onConflict: "id" });
         } else {
           await supabase
             .from("daily_reading")
@@ -112,7 +116,7 @@ export const useReadingSession = (bookId: string) => {
     try {
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("current_streak, longest_streak, last_read_date")
+        .select("*")
         .eq("user_id", user.id)
         .limit(1);
 
@@ -137,14 +141,19 @@ export const useReadingSession = (bookId: string) => {
 
       const longestStreak = Math.max(newStreak, profile.longest_streak || 0);
 
+      // ✅ Use upsert instead of update to avoid CORS PATCH issues
       await supabase
         .from("profiles")
-        .update({
-          current_streak: newStreak,
-          longest_streak: longestStreak,
-          last_read_date: today,
-        })
-        .eq("user_id", user.id);
+        .upsert(
+          {
+            ...profile,
+            current_streak: newStreak,
+            longest_streak: longestStreak,
+            last_read_date: today,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id" }
+        );
     } catch (error) {
       console.error("Failed to update streak:", error);
     }
@@ -165,16 +174,22 @@ export const useReadingSession = (bookId: string) => {
 
   // Periodic save every 60 seconds
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
+    intervalRef.current = setInterval(async () => {
       if (sessionIdRef.current && startTimeRef.current && user?.id) {
         const durationSeconds = Math.round(
           (new Date().getTime() - startTimeRef.current.getTime()) / 1000
         );
         
-        supabase
+        // ✅ Use upsert instead of update to avoid CORS PATCH
+        await supabase
           .from("reading_sessions")
-          .update({ duration_seconds: durationSeconds })
-          .eq("id", sessionIdRef.current);
+          .upsert({
+            id: sessionIdRef.current,
+            user_id: user.id,
+            book_id: bookId,
+            started_at: startTimeRef.current.toISOString(),
+            duration_seconds: durationSeconds,
+          }, { onConflict: "id" });
       }
     }, 60000);
 
@@ -183,7 +198,7 @@ export const useReadingSession = (bookId: string) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [user?.id]);
+  }, [user?.id, bookId]);
 
   return {
     startSession,

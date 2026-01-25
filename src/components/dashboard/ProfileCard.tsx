@@ -35,6 +35,7 @@ interface ProfileCardProps {
   avatarUrl?: string | null;
   displayName?: string | null;
   className?: string;
+  isLoading?: boolean;
 }
 
 export function ProfileCard({ 
@@ -44,13 +45,15 @@ export function ProfileCard({
   avatarUrl,
   displayName,
   className,
+  isLoading = false,
 }: ProfileCardProps) {
   const { user } = useAuth();
 
-  const resolvedAvatarUrl = (avatarUrl ?? "").trim() || user?.user_metadata?.avatar_url;
-  const resolvedDisplayName = (displayName ?? "").trim() || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Người dùng";
+  // Khi đang loading, không dùng fallback từ user_metadata để tránh flash
+  const resolvedAvatarUrl = isLoading ? null : ((avatarUrl ?? "").trim() || user?.user_metadata?.avatar_url);
+  const resolvedDisplayName = isLoading ? "..." : ((displayName ?? "").trim() || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Người dùng");
   const userEmail = user?.email || 'user@example.com';
-  const initials = getInitials(resolvedDisplayName);
+  const initials = isLoading ? ".." : getInitials(resolvedDisplayName);
   const avatarColorClass = getAvatarColor(userEmail);
   
   const normalizedLevel = Number.isFinite(level) ? level : 1;

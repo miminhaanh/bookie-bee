@@ -21,6 +21,7 @@ export interface Profile {
   created_at: string;
   updated_at: string;
   onboarding_completed?: boolean;
+  is_admin?: boolean | null;
 }
 
 export const useProfile = () => {

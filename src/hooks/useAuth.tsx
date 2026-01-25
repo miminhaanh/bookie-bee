@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Kiểm tra xem user hiện tại có phải admin không
+  // Kiểm tra admin bằng hardcode email - đơn giản và nhanh
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   useEffect(() => {
@@ -45,6 +45,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Đánh dấu admin - chỉ chạy một lần khi admin login
+  useEffect(() => {
+    if (!user?.id || user.email !== ADMIN_EMAIL) return;
+
+    const markAdmin = async () => {
+      try {
+        // Sử dụng upsert để tránh lỗi nếu profile chưa tồn tại
+        const { error } = await supabase
+          .from("profiles")
+          .upsert(
+            { user_id: user.id, is_admin: true },
+            { onConflict: "user_id", ignoreDuplicates: false }
+          );
+
+        if (error) {
+          // Ignore RLS errors - admin vẫn hoạt động dựa trên email check
+          console.log("Admin profile update skipped (RLS):", error.code);
+        }
+      } catch (e) {
+        // Ignore network errors
+      }
+    };
+
+    void markAdmin();
+  }, [user?.id, user?.email]);
 
   const signUp = async (email: string, password: string, displayName?: string) => {
     const redirectUrl = `${window.location.origin}/`;

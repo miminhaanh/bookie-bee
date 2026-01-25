@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings } from "lucide-react";
+import { ArrowLeft, Settings, Highlighter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -8,6 +8,7 @@ interface ReaderTopBarProps {
   bookAuthor?: string | null;
   onBack: () => void;
   onSettingsClick?: () => void;
+  onHighlightsClick?: () => void;
 }
 
 export const ReaderTopBar = ({
@@ -16,6 +17,7 @@ export const ReaderTopBar = ({
   bookAuthor,
   onBack,
   onSettingsClick,
+  onHighlightsClick,
 }: ReaderTopBarProps) => {
   return (
     <header
@@ -40,14 +42,24 @@ export const ReaderTopBar = ({
           </h1>
         </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onSettingsClick}
-          className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md"
-        >
-          <Settings className="h-4 w-4 text-gray-700" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onHighlightsClick}
+            className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md"
+          >
+            <Highlighter className="h-4 w-4 text-gray-700" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onSettingsClick}
+            className="h-9 w-9 rounded-full bg-white/90 hover:bg-white shadow-md"
+          >
+            <Settings className="h-4 w-4 text-gray-700" />
+          </Button>
+        </div>
       </div>
     </header>
   );

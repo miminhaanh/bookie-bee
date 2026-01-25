@@ -1,4 +1,4 @@
-import { X, Sun, Moon, Type, BookOpen, ZoomIn, ZoomOut, AlignVerticalJustifyCenter, AlignHorizontalJustifyCenter } from "lucide-react";
+import { X, Sun, Moon, Type, BookOpen, ZoomIn, ZoomOut, AlignVerticalJustifyCenter, AlignHorizontalJustifyCenter, Highlighter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,8 @@ import { ScrollMode } from "@react-pdf-viewer/core";
 interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenHighlights: () => void;
+  highlightsCount: number;
   brightness: number;
   onBrightnessChange: (value: number) => void;
   theme: "light" | "sepia" | "dark";
@@ -20,6 +22,8 @@ interface SettingsPanelProps {
 export function SettingsPanel({
   isOpen,
   onClose,
+  onOpenHighlights,
+  highlightsCount,
   brightness,
   onBrightnessChange,
   theme,
@@ -61,6 +65,25 @@ export function SettingsPanel({
 
         {/* Settings content */}
         <div className="px-5 pb-8 space-y-6">
+          {/* Highlights */}
+          <div className="rounded-2xl border border-border bg-muted/40 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Highlighter className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Highlights</p>
+                  <p className="text-xs text-muted-foreground">
+                    {highlightsCount > 0 ? `${highlightsCount} ghi chú đã lưu` : "Chưa có highlight"}
+                  </p>
+                </div>
+              </div>
+              <Button variant="outline" size="sm" className="rounded-lg" onClick={onOpenHighlights}>
+                Xem
+              </Button>
+            </div>
+          </div>
           {/* Scroll Mode */}
           <div className="space-y-3">
             <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">

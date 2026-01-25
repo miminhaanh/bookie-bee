@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks, type BookFormat } from "@/hooks/useBooks";
 import { useToast } from "@/hooks/use-toast";
@@ -60,9 +61,11 @@ const extractPdfToc = async (file: File): Promise<TocItem[] | null> => {
 };
 
 
+// Genres - sync với Community.tsx
 const genres = [
   "Văn học", "Self-help", "Kinh doanh", "Khoa học",
-  "Lịch sử", "Tâm lý", "Truyện ngắn", "Tiểu thuyết"
+  "Lịch sử", "Tâm lý", "Truyện ngắn", "Tiểu thuyết",
+  "Giả tưởng", "Lãng mạn", "Kinh dị", "Trinh thám"
 ];
 
 const Upload = () => {
@@ -82,8 +85,9 @@ const Upload = () => {
   });
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [isPublic, setIsPublic] = useState(false);
 
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isAdmin } = useAuth();
   const { addBook, updateBook } = useBooks();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -194,6 +198,7 @@ const Upload = () => {
         estimated_time_remaining: null,
         is_from_library: false,
         open_library_key: null,
+        is_public: isAdmin ? isPublic : false,
       });
 
       if (!coverUrlFromUpload && format === "pdf") {
@@ -369,6 +374,16 @@ const Upload = () => {
                 ))}
               </div>
             </div>
+
+            {isAdmin && (
+              <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50/40 p-4">
+                <div>
+                  <Label className="text-xs font-bold text-rose-600 uppercase tracking-wider">Công khai thư viện</Label>
+                  <p className="text-sm text-rose-700/80">Sách sẽ hiển thị ở Thư viện Cộng đồng</p>
+                </div>
+                <Switch checked={isPublic} onCheckedChange={setIsPublic} />
+              </div>
+            )}
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100 mt-6">
               <Button variant="outline" className="h-10 px-6 rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50 font-medium">Lưu nháp</Button>

@@ -3,13 +3,11 @@ import {
   Home,
   StickyNote,
   BarChart3,
-  Users,
   Settings,
   HelpCircle,
   LogOut,
   Library,
   Plus,
-  ShieldCheck
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -28,10 +26,9 @@ import { cn } from "@/lib/utils";
 
 const mainNavItems = [
   { title: "Trang chủ", icon: Home, path: "/dashboard" },
-  { title: "Thư viện", icon: Library, path: "/library" },
+  { title: "Thư viện Cộng đồng", icon: Library, path: "/community" },
   { title: "Highlights", icon: StickyNote, path: "/notes" },
   { title: "Báo cáo", icon: BarChart3, path: "/reports" },
-  { title: "Cộng đồng", icon: Users, path: "/community" },
 ];
 
 const systemNavItems = [
@@ -42,7 +39,7 @@ const systemNavItems = [
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut, isAdmin } = useAuth();
+  const { signOut } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -117,26 +114,6 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="px-4 pb-6">
-
-        {/* Admin Button - Chỉ hiện khi là admin */}
-        {isAdmin && (
-          <SidebarMenu className="mb-2">
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => navigate("/admin")}
-                className={cn(
-                  "w-full justify-start gap-3 px-4 py-3 rounded-xl transition-all",
-                  "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg hover:shadow-xl hover:from-red-600 hover:to-red-700",
-                  isActive("/admin") && "ring-2 ring-red-300"
-                )}
-              >
-                <ShieldCheck className="w-5 h-5" />
-                <span className="font-medium">Trang quản trị</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        )}
-
         {/* System Navigation */}
         <SidebarMenu>
           {systemNavItems.map((item) => (

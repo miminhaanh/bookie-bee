@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/dashboard/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,31 +11,58 @@ import { Loader2, Send, Mail, Phone, MapPin } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 
+const ADMIN_EMAIL = "bookieebee@gmail.com";
+
 const Feedback = () => {
-    const { user } = useAuth();
+    const { user, loading } = useAuth();
+    const navigate = useNavigate();
     const { toast } = useToast();
-    const [loading, setLoading] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
         content: "",
         type: "general"
     });
 
+    useEffect(() => {
+        if (!loading && !user) {
+            navigate("/auth?returnUrl=/help", { replace: true });
+        }
+    }, [loading, user, navigate]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.content.trim()) return;
 
-        setLoading(true);
+        setIsSubmitting(true);
         try {
-            // Note: Feedbacks table has been removed from the database
-            // In a production environment, this could send an email or use a third-party service
-            // For now, we just show a success message
+            const { data } = await supabase.auth.getSession();
+            if (!data.session) {
+                toast({ title: "Bạn cần đăng nhập", description: "Vui lòng đăng nhập để gửi phản hồi.", variant: "destructive" });
+                navigate("/auth?returnUrl=/help", { replace: true });
+                return;
+            }
+
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-feedback`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    content: formData.content,
+                    email: user?.email ?? null,
+                    type: formData.type,
+                }),
+            });
+
+            if (!res.ok) {
+                const errText = await res.text().catch(() => "");
+                throw new Error(errText || "Gửi phản hồi thất bại");
+            }
 
             toast({ title: "Đã gửi phản hồi! 🎉", description: "Cảm ơn đóng góp của bạn." });
             setFormData({ content: "", type: "general" });
         } catch (error: any) {
             toast({ title: "Lỗi gửi phản hồi", description: error.message, variant: "destructive" });
         } finally {
-            setLoading(false);
+            setIsSubmitting(false);
         }
     };
 
@@ -80,8 +108,8 @@ const Feedback = () => {
                                     />
                                 </div>
 
-                                <Button type="submit" className="w-full" disabled={loading}>
-                                    {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
                                     Gửi phản hồi
                                 </Button>
                             </form>
@@ -101,7 +129,7 @@ const Feedback = () => {
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium">Email hỗ trợ</p>
-                                    <p className="text-sm text-muted-foreground">lehonganh.work@gmail.com</p>
+                                    <p className="text-sm text-muted-foreground">{ADMIN_EMAIL}</p>
                                 </div>
                             </div>
 

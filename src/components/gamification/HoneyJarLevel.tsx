@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { BookieAvatar } from "./BookieAvatar";
-import { Sparkles } from "lucide-react";
 import { getLevelTitle } from "@/lib/constants";
 
 interface HoneyJarProps {
@@ -11,7 +9,6 @@ interface HoneyJarProps {
     maxXP: number;
     level: number;
     streak: number;
-    onCollectXP?: () => void;
     className?: string;
 }
 
@@ -20,25 +17,14 @@ export const HoneyJarLevel = ({
     maxXP,
     level,
     streak,
-    onCollectXP,
     className,
 }: HoneyJarProps) => {
-    const [isCollecting, setIsCollecting] = useState(false);
     const [showLevelUp, setShowLevelUp] = useState(false);
 
     // Calculate fill percentage (clamp between 5% and 95% for visual aesthetics)
     const safeMaxXp = maxXP > 0 ? maxXP : 1;
     const fillPercentage = Math.min(Math.max((currentXP / safeMaxXp) * 100, 5), 95);
     const levelInfo = getLevelTitle(level);
-
-    const handleCollect = () => {
-        setIsCollecting(true);
-        // Simulate API call / Animation delay
-        setTimeout(() => {
-            setIsCollecting(false);
-            if (onCollectXP) onCollectXP();
-        }, 1500);
-    };
 
     // Determine honey color based on level
     const getHoneyColor = () => {
@@ -98,21 +84,6 @@ export const HoneyJarLevel = ({
                 <div className="relative w-48 h-60 z-10 group cursor-pointer">
                     {/* Glow Effect behind Jar */}
                     <div className="absolute inset-0 bg-amber-400/20 blur-[50px] rounded-full scale-110 group-hover:bg-amber-400/30 transition-all duration-700" />
-
-                    {/* Drop of Honey Animation (When collecting) */}
-                    <AnimatePresence>
-                        {isCollecting && (
-                            <motion.div
-                                initial={{ y: -150, opacity: 0, scale: 0 }}
-                                animate={{ y: 40, opacity: 1, scale: 1 }}
-                                exit={{ y: 80, opacity: 0, scale: 0.5 }}
-                                transition={{ duration: 0.8, ease: "anticipate" }}
-                                className="absolute left-1/2 -top-10 -translate-x-1/2 z-40 text-4xl filter drop-shadow-md"
-                            >
-                                🍯
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
 
                     <svg viewBox="0 0 200 250" className="w-full h-full drop-shadow-2xl overflow-visible">
                         <defs>
@@ -196,26 +167,6 @@ export const HoneyJarLevel = ({
                         <rect x="32" y="30" width="136" height="8" rx="2" fill="#D97706" />
                     </svg>
                 </div>
-            </div>
-
-            {/* Button Action */}
-            <div className="mt-6 z-20">
-                <Button
-                    onClick={handleCollect}
-                    disabled={isCollecting}
-                    className={cn(
-                        "rounded-full px-10 py-6 text-lg font-bold shadow-xl transition-all hover:scale-105 active:scale-95 text-white border-2 border-white/20",
-                        "bg-gradient-to-r", getHoneyColor()
-                    )}
-                >
-                    {isCollecting ? (
-                        <span className="flex items-center gap-2">
-                            <Sparkles className="animate-spin" /> Đang hứng mật...
-                        </span>
-                    ) : (
-                        "Thu thập mật ngọt"
-                    )}
-                </Button>
             </div>
 
             {/* Footer XP Status */}

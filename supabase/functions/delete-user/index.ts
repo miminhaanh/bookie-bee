@@ -88,9 +88,20 @@ serve(async (req) => {
     const profile = profileData?.[0] ?? null
 
     // 5. Delete Database Records
-    // We try to delete from child tables first to avoid FK constraints, 
-    // although CASCADE should handle it, manual is safer for cleanup scripts.
-    const tables = ['highlights', 'reading_sessions', 'daily_reading', 'books', 'profiles']
+    // Delete from child tables first to avoid FK constraints
+    const tables = [
+      // Child tables first
+      "user_missions",
+      "user_badges",
+      "user_achievements", 
+      "streak_days",
+      "highlights",
+      "reading_sessions",
+      "daily_reading",
+      // Parent tables
+      "books",
+      "profiles",
+    ]
 
     for (const table of tables) {
       const { error } = await supabaseAdmin.from(table).delete().eq('user_id', user.id)

@@ -6,7 +6,8 @@ import { useHighlights } from "@/hooks/useHighlights";
 import { useToast } from "@/hooks/use-toast";
 import { usePdfToc } from "@/hooks/usePdfToc";
 import { supabase } from "@/integrations/supabase/client";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Json } from "@/integrations/supabase/types";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -46,6 +47,34 @@ export function BookDetailContainer() {
   const { books } = useBooks();
   const book = useMemo(() => books?.find((b) => b.id === id), [books, id]);
 
+  // Fetch reading history from reading_sessions
+  const { data: readingHistory } = useQuery({
+    queryKey: ["reading-history", id],
+    enabled: !!id && !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("reading_sessions")
+        .select("started_at")
+        .eq("book_id", id!)
+        .eq("user_id", user!.id)
+        .order("started_at", { ascending: true })
+        .limit(1);
+      
+      const { data: lastData } = await supabase
+        .from("reading_sessions")
+        .select("started_at")
+        .eq("book_id", id!)
+        .eq("user_id", user!.id)
+        .order("started_at", { ascending: false })
+        .limit(1);
+
+      return {
+        startedAt: data?.[0]?.started_at ?? null,
+        lastReadAt: lastData?.[0]?.started_at ?? null,
+      };
+    },
+  });
+
   // Fetch highlights
   const { highlights } = useHighlights(id || "");
 
@@ -65,7 +94,7 @@ export function BookDetailContainer() {
       try {
         const { error } = await supabase
           .from("books")
-          .update({ toc: extractedToc })
+          .update({ toc: extractedToc as unknown as Json })
           .eq("id", id);
         
         if (error) {
@@ -122,15 +151,50 @@ export function BookDetailContainer() {
     },
   });
 
-  // Delete book mutation
+  // Delete book mutation - Preserve XP before deleting
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      if (!id) throw new Error("No book ID");
+      if (!id || !book || !user?.id) throw new Error("No book ID");
+      
+      // Calculate XP earned from this book based on pages read (same formula as reports)
+      const pagesRead = book.status === "completed" 
+        ? (book.total_pages || 0)
+        : (book.current_page || 0);
+
+      // Save earned XP to profile's bonus_xp before deleting book
+      if (pagesRead > 0) {
+        const { data: profile, error: fetchError } = await supabase
+          .from("profiles")
+          .select("bonus_xp")
+          .eq("user_id", user.id)
+          .single();
+        
+        if (fetchError) {
+          console.error("Failed to fetch profile for XP preservation:", fetchError);
+        } else {
+          const currentBonusXP = (profile as { bonus_xp: number | null })?.bonus_xp ?? 0;
+          const newBonusXP = currentBonusXP + pagesRead;
+          
+          const { error: updateError } = await supabase
+            .from("profiles")
+            .update({ bonus_xp: newBonusXP })
+            .eq("user_id", user.id);
+          
+          if (updateError) {
+            console.error("Failed to save bonus_xp:", updateError);
+          } else {
+            console.log(`XP preserved: ${pagesRead} pages added to bonus_xp (${currentBonusXP} → ${newBonusXP})`);
+          }
+        }
+      }
+
+      // Now delete the book
       const { error } = await supabase.from("books").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["books"] });
+      qc.invalidateQueries({ queryKey: ["reports-data"] });
       toast({ title: "✅ Đã xóa sách" });
       navigate("/dashboard");
     },
@@ -193,7 +257,7 @@ export function BookDetailContainer() {
     return (
       <div className="min-h-screen bg-background p-6">
         <div className="mx-auto max-w-5xl">
-          <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4">
+          <Button variant="ghost" onClick={() => navigate("/")} className="mb-4">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Quay lại
           </Button>
@@ -219,7 +283,7 @@ export function BookDetailContainer() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate("/")}
             className="gap-2 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -257,35 +321,41 @@ export function BookDetailContainer() {
 
           <ActionButtons
             book={book}
-            canEdit={user?.id === book.user_id}
+            canEdit={user?.id === book.user_id && !book.is_from_library}
             onEditClick={() => setIsEditOpen(true)}
             onStartReading={handleStartReading}
           />
 
-          <ReadingProgress
-            currentPage={book.current_page || 0}
-            totalPages={book.total_pages || 0}
-          />
+          <div className="rounded-[28px] p-6 border border-border/60 bg-card/60 backdrop-blur">
+            <BookInfoTabs 
+              description={book.description} 
+              tocData={effectiveToc} 
+              tocLoading={tocLoading && !effectiveToc?.length}
+              bookId={id}
+              onTocItemClick={(page) => {
+                if (page && id) {
+                  navigate(`/read/${id}?page=${page}`);
+                }
+              }}
+            />
+          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
-              <BookInfoTabs 
-                description={book.description} 
-                tocData={effectiveToc} 
-                tocLoading={tocLoading && !effectiveToc?.length}
+          <div className="rounded-2xl p-5 border border-border/60 bg-card/60 backdrop-blur">
+            <div className="flex flex-col gap-4">
+              <ReadingProgress
+                currentPage={book.current_page || 0}
+                totalPages={book.total_pages || 0}
               />
-            </div>
-            <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
               <ReadingHistory
-                startedAt={(book as any).started_at}
-                lastReadAt={(book as any).last_read_at}
+                startedAt={readingHistory?.startedAt ?? null}
+                lastReadAt={readingHistory?.lastReadAt ?? null}
                 currentPage={book.current_page || 0}
                 totalPages={book.total_pages || 0}
               />
             </div>
           </div>
 
-          <div className="rounded-3xl p-6 border border-border/60 bg-card/60 backdrop-blur">
+          <div className="rounded-[26px] p-6 border border-border/60 bg-card/60 backdrop-blur">
             <HighlightsSection
               highlights={highlights || []}
               onDeleteHighlight={(hid) => deleteHighlightMutation.mutate(hid)}

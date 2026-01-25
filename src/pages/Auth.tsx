@@ -11,6 +11,8 @@ import { z } from "zod";
 const emailSchema = z.string().email("Email không hợp lệ");
 const passwordSchema = z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự");
 
+const ADMIN_EMAIL = "bookieebee@gmail.com";
+
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
@@ -20,20 +22,21 @@ const Auth = () => {
   const [beeFlying, setBeeFlying] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
-  const { signIn, signUp, user, loading } = useAuth();
+  const { signIn, signUp, user, loading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   
-  // Lấy returnUrl từ query params để redirect sau khi login
+  // Lấy returnUrl từ query params để redirect sau khi login (chỉ cho user thường)
   const returnUrl = new URLSearchParams(location.search).get('returnUrl') || '/';
 
-  // Redirect if already logged in
+  // Redirect if already logged in - phân luồng Admin vs User
   useEffect(() => {
     if (!loading && user && !beeFlying) {
-      navigate("/", { replace: true });
+      // Admin đi thẳng vào /admin, User thường đi về /
+      navigate(isAdmin ? "/admin" : "/", { replace: true });
     }
-  }, [user, loading, navigate, beeFlying]);
+  }, [user, loading, navigate, beeFlying, isAdmin]);
 
   const validateForm = () => {
     const newErrors: { email?: string; password?: string } = {};
@@ -101,6 +104,16 @@ const Auth = () => {
           }
           setIsSubmitting(false);
         } else {
+          const isAdminEmail = email.trim().toLowerCase() === ADMIN_EMAIL;
+          if (isAdminEmail) {
+            toast({
+              title: "Chào mừng Admin! 🐝",
+              description: "Đăng nhập thành công",
+            });
+            navigate("/admin", { replace: true });
+            return;
+          }
+
           // Success - trigger bee flying animation
           setBeeFlying(true);
           toast({
@@ -109,7 +122,7 @@ const Auth = () => {
           });
           // Wait for animation then navigate
           setTimeout(() => {
-            navigate("/", { replace: true });
+            navigate(returnUrl, { replace: true });
           }, 1500);
         }
       } else {

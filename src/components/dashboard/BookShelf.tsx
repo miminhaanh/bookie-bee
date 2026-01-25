@@ -54,7 +54,7 @@ export function BookShelf({
   const Icon = config.icon;
 
   return (
-    <section className="mb-8">
+    <section>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
@@ -80,7 +80,7 @@ export function BookShelf({
       </div>
 
       {/* Books Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 lg:gap-8">
         {books.map((book, i) => (
           <motion.div
             key={book.id}

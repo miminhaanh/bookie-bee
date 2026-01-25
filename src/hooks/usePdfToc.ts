@@ -41,6 +41,7 @@ export function usePdfToc(fileUrl: string | null | undefined): UsePdfTocResult {
     const extractToc = async () => {
       setIsLoading(true);
       setError(null);
+      console.log("[usePdfToc] Starting TOC extraction for:", fileUrl);
 
       try {
         // Dynamically import pdfjs
@@ -50,15 +51,22 @@ export function usePdfToc(fileUrl: string | null | undefined): UsePdfTocResult {
         // Fetch the PDF
         let pdfData: ArrayBuffer;
         const isAbsolute = /^https?:\/\//i.test(fileUrl);
+        console.log("[usePdfToc] URL type:", isAbsolute ? "absolute" : "relative (Supabase storage)");
 
         if (!isAbsolute) {
           // Download from Supabase storage
+          console.log("[usePdfToc] Downloading from Supabase storage bucket 'book-files':", fileUrl);
           const { data, error: downloadError } = await supabase.storage
             .from("book-files")
             .download(fileUrl);
-          if (downloadError) throw downloadError;
+          if (downloadError) {
+            console.error("[usePdfToc] Supabase download error:", downloadError);
+            throw downloadError;
+          }
+          console.log("[usePdfToc] Download successful, size:", data.size);
           pdfData = await data.arrayBuffer();
         } else {
+          console.log("[usePdfToc] Fetching from URL:", fileUrl);
           const response = await fetch(fileUrl, { credentials: "include" });
           if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status}`);
           pdfData = await response.arrayBuffer();
@@ -69,15 +77,18 @@ export function usePdfToc(fileUrl: string | null | undefined): UsePdfTocResult {
         // Load the PDF document
         const loadingTask = pdfjs.getDocument({ data: pdfData });
         const pdf = await loadingTask.promise;
+        console.log("[usePdfToc] PDF loaded, pages:", pdf.numPages);
 
         if (cancelled) return;
 
         // Get the outline (TOC)
         const outline = await pdf.getOutline();
+        console.log("[usePdfToc] Outline result:", outline ? `${outline.length} items` : "no outline");
 
         if (cancelled) return;
 
         if (!outline || outline.length === 0) {
+          console.log("[usePdfToc] No TOC found in PDF");
           setToc([]);
           setIsLoading(false);
           return;
@@ -130,13 +141,14 @@ export function usePdfToc(fileUrl: string | null | undefined): UsePdfTocResult {
         };
 
         const tocItems = await convertOutline(outline);
+        console.log("[usePdfToc] Extracted TOC items:", tocItems.length);
         
         if (!cancelled) {
           setToc(tocItems);
         }
       } catch (err) {
         if (!cancelled) {
-          console.error("Failed to extract TOC:", err);
+          console.error("[usePdfToc] Failed to extract TOC:", err);
           setError(err instanceof Error ? err.message : "Failed to extract TOC");
         }
       } finally {

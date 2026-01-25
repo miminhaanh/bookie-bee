@@ -1,43 +1,51 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 
-const AD_COOKIE_NAME = "bookie_ad_closed";
-const AD_COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
-
-// Random delay between 3-10 minutes (180000-600000ms)
-const getRandomDelay = () => {
-  const minDelay = 3 * 60 * 1000; // 3 minutes
-  const maxDelay = 10 * 60 * 1000; // 10 minutes
-  return Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
-};
+const AD_DELAY_MS = 60 * 1000; // 1 minute
 
 const AdPopup = () => {
+    const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
+    const timerRef = useRef<number | null>(null);
+    const lastUserIdRef = useRef<string | null>(null);
 
     useEffect(() => {
-        // Check if popup was closed previously
-        const isAdClosed = document.cookie
-            .split("; ")
-            .find((row) => row.startsWith(`${AD_COOKIE_NAME}=`));
-
-        if (!isAdClosed) {
-            // Show popup after random delay (3-10 minutes)
-            const delay = getRandomDelay();
-            console.log(`Ad will appear in ${Math.round(delay / 60000)} minutes`);
-            
-            const timer = setTimeout(() => {
-                setIsOpen(true);
-            }, delay);
-
-            return () => clearTimeout(timer);
+        if (!user?.id) {
+            setIsOpen(false);
+            if (lastUserIdRef.current) {
+                sessionStorage.removeItem(`bookie_ad_shown_${lastUserIdRef.current}`);
+                lastUserIdRef.current = null;
+            }
+            if (timerRef.current) {
+                window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+            return;
         }
-    }, []);
+
+        lastUserIdRef.current = user.id;
+        const key = `bookie_ad_shown_${user.id}`;
+        const alreadyShown = sessionStorage.getItem(key) === "true";
+
+        if (alreadyShown) return;
+
+        timerRef.current = window.setTimeout(() => {
+            setIsOpen(true);
+            sessionStorage.setItem(key, "true");
+        }, AD_DELAY_MS);
+
+        return () => {
+            if (timerRef.current) {
+                window.clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
+        };
+    }, [user?.id]);
 
     const handleClose = () => {
         setIsOpen(false);
-        // Set cookie to prevent reappearing for 7 days
-        document.cookie = `${AD_COOKIE_NAME}=true; path=/; max-age=${AD_COOKIE_MAX_AGE}`;
     };
 
     if (!isOpen) return null;

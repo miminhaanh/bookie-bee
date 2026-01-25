@@ -23,6 +23,7 @@ import { ReaderTopBar } from "./parts/ReaderTopBar";
 import { ReaderBottomBar } from "./parts/ReaderBottomBar";
 import { SettingsPanel } from "./parts/SettingsPanel";
 import { TranslationDialog } from "./overlays/TranslationDialog";
+import { HighlightsList } from "./overlays/HighlightsList";
 
 const ReaderContainer = () => {
   const { id } = useParams<{ id: string }>();
@@ -49,6 +50,10 @@ const ReaderContainer = () => {
     setHasVisitedPage,
     pageHighlights,
     setPageHighlights,
+    highlightsList,
+    isHighlightsLoading,
+    deletingHighlightId,
+    deleteHighlight,
     isTranslateOpen,
     setIsTranslateOpen,
     translateSourceText,
@@ -79,6 +84,8 @@ const ReaderContainer = () => {
     bookLoadError,
     hydratedPage,
     isHydrated,
+    isHighlightsOpen,
+    setIsHighlightsOpen,
   } = core;
   const currentTheme = themeStyles[theme];
   const isPdfFile = fileUrl.toLowerCase().endsWith(".pdf");
@@ -90,6 +97,8 @@ const ReaderContainer = () => {
   const [brightness, setBrightness] = useState(100);
   const [zoomLevel, setZoomLevel] = useState(1);
   const pdfLoadedRef = useRef(false);
+  const startedAtSavedRef = useRef(false);
+  const lastReadUpdateRef = useRef<number>(0);
 
   const effectiveViewMode = useMemo(() => {
     if (scrollMode !== ScrollMode.Horizontal) return ViewMode.SinglePage;
@@ -107,6 +116,19 @@ const ReaderContainer = () => {
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
+
+  useEffect(() => {
+    if (!book || !user?.id || startedAtSavedRef.current) return;
+    startedAtSavedRef.current = true;
+
+    const nowIso = new Date().toISOString();
+    updateBook.mutate({
+      id: book.id,
+      ...(book.status === "to_read" ? { status: "reading" } : {}),
+      started_at: book.started_at ?? nowIso,
+      last_read_at: nowIso,
+    } as any);
+  }, [book, user?.id, updateBook]);
 
   const jumpSpread = useCallback(
     (direction: "next" | "prev") => {
@@ -368,6 +390,17 @@ const ReaderContainer = () => {
           }
         );
       }
+
+      if (book) {
+        const now = Date.now();
+        if (now - lastReadUpdateRef.current > 60_000) {
+          lastReadUpdateRef.current = now;
+          updateBook.mutate({
+            id: book.id,
+            last_read_at: new Date(now).toISOString(),
+          } as any);
+        }
+      }
     },
     [core, setHasVisitedPage, setCurrentPage, numPages, totalPages, book, updateBook]
   );
@@ -421,10 +454,26 @@ const ReaderContainer = () => {
         error={translateError}
       />
 
+      <HighlightsList
+        isOpen={isHighlightsOpen}
+        onOpenChange={setIsHighlightsOpen}
+        highlights={highlightsList}
+        isLoading={isHighlightsLoading}
+        deletingId={deletingHighlightId}
+        onJumpToPage={(pageNumber) => {
+          pageNavigationPluginInstance.jumpToPage(Math.max(0, pageNumber - 1));
+        }}
+        onDeleteHighlight={async (highlightId) => {
+          await deleteHighlight.mutateAsync(highlightId);
+        }}
+      />
+
       {/* Settings Panel */}
       <SettingsPanel
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        onOpenHighlights={() => setIsHighlightsOpen(true)}
+        highlightsCount={highlightsList.length}
         brightness={brightness}
         onBrightnessChange={setBrightness}
         theme={theme}
@@ -450,6 +499,7 @@ const ReaderContainer = () => {
           endSession();
           navigate(`/book/${id}`);
         }}
+        onHighlightsClick={() => setIsHighlightsOpen(true)}
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
 

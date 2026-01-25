@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { BookStatus } from "@/hooks/useBooks";
 import { useReportsData } from "@/hooks/useReportsData";
 import { UserTour } from "@/components/common/UserTour";
+import AdPopup from "@/components/common/AdPopup";
 
 interface BookWithProgress {
   id: string;
@@ -169,6 +170,7 @@ const Dashboard = () => {
   return (
     <SidebarProvider>
       <UserTour run={runTour} onFinish={handleTourFinish} />
+      <AdPopup />
       <div className="min-h-screen flex w-full">
         <AppSidebar />
 
@@ -180,53 +182,60 @@ const Dashboard = () => {
           </header>
 
           <ScrollArea className="flex-1">
-            <div className="p-6 max-w-7xl mx-auto">
-              <section className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="md:col-span-2 lg:col-span-2">
-                  <ProfileCard
-                    className="profile-card-tour h-full"
-                    level={reportData?.level.currentLevel ?? 1}
-                    xp={reportData?.level.currentXP ?? 0}
-                    xpToNextLevel={
-                      reportData?.level.totalXPForNextLevel ?? 500
-                    }
-                    avatarUrl={profileAvatarUrl}
-                    displayName={profileDisplayName}
-                  />
-                </div>
-                <div className="md:col-span-2 lg:col-span-1">
-                  <StatsCards
-                    totalBooks={
-                      booksReading.length +
-                      booksCompleted.length +
-                      booksSaved.length
-                    }
-                    completedBooks={booksCompleted.length}
-                    streak={reportData?.streak ?? 0}
-                  />
-                </div>
+            <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
+              {/* Top Section: Profile + Stats */}
+              <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px] lg:gap-6">
+                {/* Profile Card - Primary focus */}
+                <ProfileCard
+                  className="profile-card-tour"
+                  level={reportData?.level.currentLevel ?? 1}
+                  xp={reportData?.level.currentXP ?? 0}
+                  xpToNextLevel={
+                    reportData?.level.totalXPForNextLevel ?? 500
+                  }
+                  avatarUrl={profileAvatarUrl}
+                  displayName={profileDisplayName}
+                  isLoading={loading}
+                />
+                
+                {/* Stats Cards - Secondary, stacked vertically on right */}
+                <StatsCards
+                  totalBooks={
+                    booksReading.length +
+                    booksCompleted.length +
+                    booksSaved.length
+                  }
+                  completedBooks={booksCompleted.length}
+                  streak={reportData?.streak ?? 0}
+                />
               </section>
 
-              <DashboardToolbar onSearch={setSearchQuery} />
+              {/* Search Section - Standalone */}
+              <section>
+                <DashboardToolbar onSearch={setSearchQuery} />
+              </section>
 
-              <BookShelf
-                title="Đang đọc"
-                books={filterBooks(booksReading)}
-                type="reading"
-                showAddButton
-              />
+              {/* Book Shelves - Clear separation */}
+              <section className="space-y-8 pt-2">
+                <BookShelf
+                  title="Đang đọc"
+                  books={filterBooks(booksReading)}
+                  type="reading"
+                  showAddButton
+                />
 
-              <BookShelf
-                title="Đã hoàn thành"
-                books={filterBooks(booksCompleted)}
-                type="completed"
-              />
+                <BookShelf
+                  title="Đã hoàn thành"
+                  books={filterBooks(booksCompleted)}
+                  type="completed"
+                />
 
-              <BookShelf
-                title="Sách muốn đọc"
-                books={filterBooks(booksSaved)}
-                type="saved"
-              />
+                <BookShelf
+                  title="Sách muốn đọc"
+                  books={filterBooks(booksSaved)}
+                  type="saved"
+                />
+              </section>
 
               {loading && (
                 <p className="text-sm text-muted-foreground mt-4">

@@ -35,6 +35,9 @@ export interface Book {
   created_at: string;
   updated_at: string;
   visibility?: string | null;
+  is_public?: boolean | null;
+  started_at?: string | null;
+  last_read_at?: string | null;
 }
 
 export const useBooks = () => {

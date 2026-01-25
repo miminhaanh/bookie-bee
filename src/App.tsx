@@ -20,6 +20,7 @@ import NotificationSettings from "./pages/settings/NotificationSettings";
 import DataSettings from "./pages/settings/DataSettings";
 import Reports from "./pages/Report";
 import Feedback from "./pages/Feedback";
+import AdminDashboard from "./pages/AdminDashboard";
 
 
 const queryClient = new QueryClient();
@@ -49,6 +50,7 @@ const App = () => (
             <Route path="/add-book" element={<AddBook />} />
             <Route path="/book/:id" element={<BookDetail />} />
             <Route path="/read/:id" element={<Reader />} />
+            <Route path="/admin" element={<AdminDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

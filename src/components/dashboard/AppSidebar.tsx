@@ -8,7 +8,8 @@ import {
   HelpCircle,
   LogOut,
   Library,
-  Plus
+  Plus,
+  ShieldCheck
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -41,7 +42,7 @@ const systemNavItems = [
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, isAdmin } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -116,6 +117,25 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="px-4 pb-6">
+
+        {/* Admin Button - Chỉ hiện khi là admin */}
+        {isAdmin && (
+          <SidebarMenu className="mb-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => navigate("/admin")}
+                className={cn(
+                  "w-full justify-start gap-3 px-4 py-3 rounded-xl transition-all",
+                  "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg hover:shadow-xl hover:from-red-600 hover:to-red-700",
+                  isActive("/admin") && "ring-2 ring-red-300"
+                )}
+              >
+                <ShieldCheck className="w-5 h-5" />
+                <span className="font-medium">Trang quản trị</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
 
         {/* System Navigation */}
         <SidebarMenu>
